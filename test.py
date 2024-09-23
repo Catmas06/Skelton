@@ -4,10 +4,10 @@ import os
 import torch
 import numpy as np
 from tqdm import tqdm
-from feeders.feeder import Feeder
-from model import Model
+from pre_data.feeder import Feeder
+from model.dmodel import Model
 from torch.utils.data import Dataset,DataLoader
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 
 class Val():
