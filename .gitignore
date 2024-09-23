@@ -1,5 +1,6 @@
 # dirs
 data/
-outputs/
+output/
+log/
 
 .pt
