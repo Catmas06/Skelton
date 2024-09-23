@@ -61,13 +61,10 @@ class Leaner():
         for epoch in range(epoch):
             for data, label in tqdm(self.dataloader, desc='Training progress epoch {}'.format(epoch)):
                 self.global_step += 1
-                # get data [N, 3, 300, 17, 2]
+                # data [N, 12, 300, 17, 2]
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
-                # data [N, 3, 128, 17, 1]
-                # data = data[:,:,0:128,:,0:1].detach()
+                # label [N,]
                 label = torch.as_tensor(label, dtype=torch.int64, device=self.device).detach()
-                # data = data.clone().detach()
-                # label = label.clone().detach()
 
                 # forward
                 output = self.model(data)
@@ -83,17 +80,10 @@ class Leaner():
                 acc = torch.mean((predict_label == label.data).float())
                 self.train_writer.add_scalar('acc', acc, self.global_step)
                 self.train_writer.add_scalar('loss', loss.data.item(), self.global_step)
-                # self.train_writer.add_scalar('batch_time', process.iterable.last_duration, self.global_step)
 
                 # statistics
                 self.lr = self.optimizer.param_groups[0]['lr']
                 self.train_writer.add_scalar('lr', self.lr, self.global_step)
-                # if self.global_step % self.arg.log_interval == 0:
-                #     self.print_log(
-                #         '\tBatch({}/{}) done. Loss: {:.4f}  lr:{:.6f}'.format(
-                #             batch_idx, len(loader), loss.data[0], lr))
-
-                # statistics of time consumption and loss
                 if self.global_step % 100 == 0:
                     self.save_to_checkpoint()
 
@@ -108,7 +98,6 @@ if __name__ == '__main__':
                         default='./config/params.yaml',
                         help='path of the config file')
     parser.add_argument('--epoch')
-    # load arg form config file
     p = parser.parse_args()
     if p.config_dir is not None:
         with open(p.config_dir, 'r') as f:
