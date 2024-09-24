@@ -4,8 +4,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
-from einops import rearrange
 
 class Multi_Head_Temporal_Attention(nn.Module):
     def __init__(self,channels,H,T,A,inherent=1,norm='bn',dropout=0.1,with_cls_token=0,pe=1):
@@ -82,7 +80,7 @@ class Multi_Head_Temporal_Attention(nn.Module):
 
         N,D,T,V = x.shape
 
-        x = rearrange(x, 'n d t v -> n t (d v)')
+        x = x.permute(0,2,1,3).contiguous().view(N,T,D*V)
 
         cls_tokens = None
         if self.cls_token is not None:
@@ -94,7 +92,7 @@ class Multi_Head_Temporal_Attention(nn.Module):
         if self.pe:
             x += self.pos_embedding[:, :T]
 
-        x = rearrange(x, 'n t (d v) -> n d t v ',d=D,v=V)
+        x = x.view(N,T,D,V).permute(0,2,1,3).contiguous()
 
         output = []
         for i in range(self.head_num):
@@ -108,8 +106,7 @@ class Multi_Head_Temporal_Attention(nn.Module):
         if self.norm_type == 'ln':
             z = self.norm(z)
 
-        z = rearrange(z, 'n t (d v) -> n d t v ',d=D,v=V)
-        #z = z.reshape(N,T,-1,V).permute(0,2,1,3).contiguous()
+        z = z.view(N,T,D,V).permute(0,2,1,3).contiguous()
 
         if self.norm_type == 'bn':
             z = self.norm(z)
@@ -119,13 +116,11 @@ class Multi_Head_Temporal_Attention(nn.Module):
 
         # ffn + norm + add
         z = self.relu(self.ffn(z)) + self.residual(x)
-        #z = self.ffn2(self.relu(self.ffn1(z))) + self.residual(x)
 
         if self.norm_type == 'bn':
             z = self.norm(z)
 
-        #z = z.permute(0,2,1,3).contiguous().reshape(N,T,-1)
-        z = rearrange(z, 'n d t v -> n t (d v)')
+        z = z.permute(0,2,1,3).contiguous().view(N,T,D*V)
 
         if self.norm_type == 'ln':
             z = self.norm(z)
@@ -135,8 +130,7 @@ class Multi_Head_Temporal_Attention(nn.Module):
             z = z[:, 1:]
 
         # reshape
-        #z = z.reshape(N,T,-1,V).permute(0,2,1,3).contiguous()
-        z = rearrange(z, 'n t (d v) -> n d t v ',d=D,v=V)
+        z = z.view(N,T,D,V).permute(0,2,1,3).contiguous()
 
         return z,cls_tokens
 

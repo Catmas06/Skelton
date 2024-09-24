@@ -2,6 +2,7 @@ import numpy as np
 import os
 from torch.utils.data import Dataset
 from numpy.lib.format import open_memmap
+from tqdm import tqdm
 from utils import tools
 from pre_data import gen_modal
 
@@ -59,9 +60,10 @@ class Feeder(Dataset):
         N, C, T, V, M = self.data.shape
         gen_modal.gen_bone(self.set, debug=self.debug)
         gen_modal.merge_joint_bone_data(self.set, debug=self.debug)
-        motion = open_memmap(f'./data/{self.set}_joint_bone.npy',dtype='float32',mode='r+',shape=(N, C*2, T, V, M))
+        motion = open_memmap(f'./data/{self.set}_joint_bone.npy',
+                             dtype='float32',mode='r+',shape=(N, C*2, T, V, M))
         self.data = np.array(motion)
-        for t in range(T - 1):
+        for t in tqdm(range(T - 1), desc='Generating motion modality'):
             motion[:, :, t, :, :] = motion[:, :, t + 1, :, :] - motion[:, :, t, :, :]
         motion[:, :, T - 1, :, :] = 0
         # C:[joint, bone, joint_motion, bone_motion] 4*3=12

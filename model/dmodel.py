@@ -68,7 +68,7 @@ class unit_gcn_3d(nn.Module):
             return A_large
 
         A_tile = [build_spatial_temporal_graph(A[i],self.win) for i in range(self.num)]
-        self.A_tile = torch.Tensor(A_tile).numpy()
+        self.A_tile = np.stack(A_tile, axis=0)
         self.gcn = unit_gcn_qkv(in_channels,out_channels,self.A_tile,adaptive=adaptive,attention=attention)
 
     def forward(self,x):
