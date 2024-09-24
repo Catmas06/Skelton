@@ -54,20 +54,24 @@ class Feeder(Dataset):
             self.data = np.load(self.data_path, mmap_mode='r')
         else:
             self.data = np.load(self.data_path)
-        if self.debug:
-            self.label = self.label[0:100]
-            self.data = self.data[0:100]
         N, C, T, V, M = self.data.shape
         gen_modal.gen_bone(self.set, debug=self.debug)
         gen_modal.merge_joint_bone_data(self.set, debug=self.debug)
-        motion = open_memmap(f'./data/{self.set}_joint_bone.npy',
-                             dtype='float32',mode='r+',shape=(N, C*2, T, V, M))
-        self.data = np.array(motion)
-        for t in tqdm(range(T - 1), desc='Generating motion modality'):
-            motion[:, :, t, :, :] = motion[:, :, t + 1, :, :] - motion[:, :, t, :, :]
-        motion[:, :, T - 1, :, :] = 0
-        # C:[joint, bone, joint_motion, bone_motion] 4*3=12
-        self.data = np.concatenate((self.data, motion), axis=1)
+        if not os.path.exists(f'./data/{self.set}_joint_bone_motion.npy'):
+            motion = np.load(f'./data/{self.set}_joint_bone.npy')
+            self.data = np.array(motion)
+            for t in tqdm(range(T - 1), desc='Generating motion modality'):
+                motion[:, :, t, :, :] = motion[:, :, t + 1, :, :] - motion[:, :, t, :, :]
+            motion[:, :, T - 1, :, :] = 0
+            # C:[joint, bone, joint_motion, bone_motion] 4*3=12
+            self.data = np.concatenate((self.data, motion), axis=1)
+            np.save(f'./data/{self.set}_joint_bone_motion.npy', self.data)
+        else:
+            self.data = np.load(f'./data/{self.set}_joint_bone_motion.npy')
+            print('data already prepared')
+        if self.debug:
+            self.label = self.label[0:100]
+            self.data = self.data[0:100]
 
 
     def get_mean_map(self):
