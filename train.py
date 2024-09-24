@@ -84,6 +84,7 @@ class Leaner():
     def train(self, epoch):
         if os.path.exists(self.arg.model_path):
             self.load_from_checkpoint()
+            print(f'loaded checkpoint from {self.arg.model_path}')
         self.model.to(self.device)
         self.model.train()
         self.print_log('Training epoch: {}'.format(epoch))
@@ -123,6 +124,7 @@ class Leaner():
                 if self.now_acc > self.max_acc:
                     self.max_acc = self.now_acc
                     self.save_to_checkpoint(self.state_dict(), f'weights_acc_{self.max_acc:.4f}')
+                    self.save_to_checkpoint(self.state_dict(), f'best_weights.pt')
 
             self.print_log(f'\tMean training loss: {np.mean(loss_value):.4f}')
             self.print_log(f'\tMean training acc: {np.mean(acc_value):.4f}')
