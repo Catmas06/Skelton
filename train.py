@@ -18,7 +18,6 @@ class Leaner():
             dataset=Feeder(**self.arg.train_feeder_args),
             batch_size=self.arg.batch_size,
             shuffle=True,
-            # num_workers=self.arg.num_worker,
             num_workers=0,
             drop_last=True,
             pin_memory=True,
@@ -28,13 +27,8 @@ class Leaner():
         self.train_writer = SummaryWriter(os.path.join(arg.log_dir, 'train'), 'train')
         self.global_step = 0
         self.device = torch.device('cuda:{}'.format(self.arg.device))
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=float(self.arg.base_lr),
-            weight_decay=self.arg.weight_decay)
         self.loss = torch.nn.CrossEntropyLoss()
-        self.now_acc = 0
-        self.max_acc = 0
+        self.max_acc = 0.5
 
     def print_log(self, str):
         print(str)
@@ -76,7 +70,15 @@ class Leaner():
             self.model.module.load_state_dict(checkpoint['model'])
         else:
             self.model.load_state_dict(checkpoint['model'])
+        self.model.to(self.device)
+        self.optimizer = torch.optim.AdamW(self.model.parameters(),
+                                          lr=float(self.arg.base_lr),
+                                          weight_decay=self.arg.weight_decay)
         self.optimizer.load_state_dict(checkpoint['optimizer'])
+        # for state in self.optimizer.state.values():
+        #     for k, v in state.items():
+        #         if isinstance(v, torch.Tensor):
+        #             state[k] = v.cuda()
         self.global_step = checkpoint['global_step']
         self.max_acc = checkpoint['max_acc']
         print(f'loaded checkpoint from {self.arg.model_path}')
@@ -84,12 +86,17 @@ class Leaner():
     def train(self, epoch):
         if os.path.exists(self.arg.model_path):
             self.load_from_checkpoint()
-            print(f'loaded checkpoint from {self.arg.model_path}')
-        self.model.to(self.device)
+        else:
+            self.model.to(self.device)
+            self.optimizer = torch.optim.AdamW(self.model.parameters(),
+                                              lr=float(self.arg.base_lr),
+                                              weight_decay=self.arg.weight_decay)
         self.model.train()
-        self.print_log('Training epoch: {}'.format(epoch))
+        self.print_log(f'Training epoch: {epoch}')
+        self.print_log(f'\t===== training from global steps {self.global_step} =====')
         self.epoch = epoch
         self.train_writer.add_scalar('epoch', epoch, self.global_step)
+        mean_acc = 0
         for epoch in range(epoch):
             loss_value = []
             acc_value = []
@@ -111,27 +118,30 @@ class Leaner():
                 # 写入log
                 loss_value.append(loss.data.item())
                 value, predict_label = torch.max(output.data, 1)
-                self.now_acc = torch.mean((predict_label == label.data).float()).item()
-                acc_value.append(self.now_acc)
-                self.train_writer.add_scalar('acc', self.now_acc, self.global_step)
+                now_acc = torch.mean((predict_label == label.data).float()).item()
+                acc_value.append(now_acc)
+                self.train_writer.add_scalar('acc', now_acc, self.global_step)
                 self.train_writer.add_scalar('loss', loss.data.item(), self.global_step)
 
                 # statistics
                 self.lr = self.optimizer.param_groups[0]['lr']
                 self.train_writer.add_scalar('lr', self.lr, self.global_step)
-                if self.global_step % 100 == 0:
-                    self.save_to_checkpoint(self.state_dict())
-                if self.now_acc > self.max_acc:
-                    self.max_acc = self.now_acc
-                    self.save_to_checkpoint(self.state_dict(), f'weights_acc_{self.max_acc:.4f}')
-                    self.save_to_checkpoint(self.state_dict(), f'best_weights.pt')
 
+            # save model after one epoch
+            self.save_to_checkpoint(self.state_dict())
+
+            # save the best model
+            mean_acc = np.mean(acc_value)
+            if mean_acc > self.max_acc:
+                self.max_acc = mean_acc
+                self.save_to_checkpoint(self.state_dict(), f'weights_acc_{self.max_acc:.4f}')
+                self.save_to_checkpoint(self.state_dict(), f'best_weights')
             self.print_log(f'\tMean training loss: {np.mean(loss_value):.4f}')
-            self.print_log(f'\tMean training acc: {np.mean(acc_value):.4f}')
-            self.print_log(f'\tmin training acc: {self.max_acc:.4f}')
+            self.print_log(f'\tMean training acc: {mean_acc:.4f}')
+            self.print_log(f'\tMax training acc: {self.max_acc:.4f}')
+            self.print_log(f'\t============ global steps {self.global_step} ============')
 
-        self.save_to_checkpoint(self.state_dict(), f'last_weights_{self.now_acc:.4f}')
-        self.print_log(f'\t========== global steps ==========: {self.global_step}')
+        self.save_to_checkpoint(self.state_dict(), f'last_weights_{mean_acc:.4f}')
 
 
 
