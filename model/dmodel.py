@@ -305,7 +305,7 @@ class TA_GCN3D_unit(nn.Module):
 
 class Model(nn.Module):
     def __init__(self, num_class=155, num_point=17, num_person=2, graph=None, graph_args=dict(), in_channels=12,
-                 drop_out=0, adaptive=True, attention=True):
+                 drop_out=0.2, adaptive=True, attention=True):
         super(Model, self).__init__()
 
         if graph is None:
@@ -321,16 +321,16 @@ class Model(nn.Module):
 
         #3D-TA all
         if 1:
-            self.l1 = TCNC_GCN_unit(12, 64, A, residual=False, adaptive=adaptive, attention=attention)
+            self.l1 = TCNC_GCN_unit(in_channels*num_person, 64, A, residual=False, adaptive=adaptive, attention=attention)
             self.l2 = TCNC_GCN_unit(64, 64, A, adaptive=adaptive, attention=attention)
             self.l3 = TCNC_GCN_unit(64, 64, A, adaptive=adaptive, attention=attention)
             self.l4 = TCNC_GCN_unit(64, 64, A, adaptive=adaptive, attention=attention)
             self.l5 = TCNC_GCN_unit(64, 128, A, stride=2, adaptive=adaptive, attention=attention)
-            self.l6 = TA_GCN3D_unit(128, 128, 150, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0.0,pe=0)
-            self.l7 = TA_GCN3D_unit(128, 128, 150, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0.0,pe=0)
+            self.l6 = TA_GCN3D_unit(128, 128, 150, A, adaptive=adaptive, attention=attention,inherent=0,head=8,dropout=0,pe=0)
+            self.l7 = TA_GCN3D_unit(128, 128, 150, A, adaptive=adaptive, attention=attention,inherent=0,head=8,dropout=0.3,pe=0)
             self.l8 = TCNC_GCN3D_unit(128, 256, A, stride=2, adaptive=adaptive, attention=attention)
-            self.l9 = TA_GCN3D_unit(256, 256, 75, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0.0,pe=0)
-            self.l10 = TA_GCN3D_unit(256, 256, 75, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0.0,pe=0)
+            self.l9 = TA_GCN3D_unit(256, 256, 75, A, adaptive=adaptive, attention=attention,inherent=0,head=4,dropout=0.3,pe=0)
+            self.l10 = TA_GCN3D_unit(256, 256, 75, A, adaptive=adaptive, attention=attention,inherent=0,head=4,dropout=0.3,pe=0)
             output_emb = 256
 
         self.emb_dim = num_point * 256
@@ -359,7 +359,7 @@ class Model(nn.Module):
 
         x = x.permute(0, 4, 3, 1, 2).contiguous().view(N, M * V * C, T)
         x = self.data_bn(x)
-        x = x.view(N, M, V, C, T).permute(0, 1, 3, 4, 2).contiguous().view(N * M, C, T, V)
+        x = x.view(N, M, V, C, T).permute(0, 1, 3, 4, 2).contiguous().view(N, M * C, T, V)
 
         #N,C,T,V
         x = self.l1(x)
@@ -376,8 +376,8 @@ class Model(nn.Module):
         # N*M,C,T,V
         c_new = x.size(1)
         #x = x.view(N, M, c_new, -1)
-        x = x.reshape(N, M, c_new, -1)
-        x = x.mean(3).mean(1)
+        x = x.reshape(N, c_new, -1)
+        x = x.mean(2)
         x = self.drop_out(x)
         x = self.fc(x)
 

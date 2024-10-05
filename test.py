@@ -23,7 +23,10 @@ class Val():
         self.model = Model(graph=self.arg.model_args['graph'],
                            graph_args=self.arg.model_args['graph_args'])
         self.device = torch.device('cuda:{}'.format(self.arg.test_device))
-        self.loss = torch.nn.CrossEntropyLoss()
+        self.loss_func = torch.nn.CrossEntropyLoss()
+        self.acc = 0
+        self.loss = 100
+        self.max_acc = 0.65
 
     def load_from_checkpoint(self):
         path = self.arg.test_path
@@ -41,13 +44,13 @@ class Val():
         print(str)
         if not os.path.exists(self.arg.log_dir):
             os.mkdir(self.arg.work_dir)
-        with open('{}/test_log.txt'.format(self.arg.log_dir), 'a') as f:
+        with open('{}/log.txt'.format(self.arg.log_dir), 'a') as f:
             print(str, file=f)
 
     def test(self, epoch, save_model=False):
         self.load_from_checkpoint()
         self.model.eval()
-        global_acc = 0
+        global_acc = []
         loss_value = []
         with torch.no_grad():
             for data, label in tqdm(self.dataloader, desc='Testing progress epoch {}'.format(epoch)):
@@ -57,16 +60,19 @@ class Val():
 
                 # forward
                 output = self.model(data)
-                loss = self.loss(output, label)
+                loss = self.loss_func(output, label)
                 # 写入log
                 loss_value.append(loss.data.item())
                 value, predict_label = torch.max(output.data, 1)
                 acc = torch.mean((predict_label == label.data).float())
-                acc /= len(self.dataloader)
-                global_acc += acc
-            self.print_log(f'\tMean testing loss: {np.mean(loss_value):.4f}')
-            self.print_log('\tMean testing acc: {:.4f}.'.format(global_acc))
-
+                global_acc.append(acc.item())
+            self.acc = np.mean(global_acc)
+            self.loss = np.mean(loss_value)
+            if self.acc > self.max_acc:
+                self.max_acc = self.acc
+            self.print_log(f'\tMean testing loss: {self.loss:.4f}')
+            self.print_log(f'\tMean testing acc: {self.acc:.4f}.')
+            self.print_log(f'\t Max testing acc: {self.max_acc:.4f}')
 
 
 # Press the green button in the gutter to run the script.
@@ -88,5 +94,5 @@ if __name__ == '__main__':
 
     arg = parser.parse_args()
     leaner = Val(arg)
-    leaner.test(arg.num_epoch)
+    leaner.test()
 

@@ -22,12 +22,7 @@ class Multi_Head_Temporal_Attention(nn.Module):
 
         self.residual = lambda x: x
         self.ffn = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=1)
-
-        #self.ffn1 = nn.Conv2d(in_channels=channels, out_channels=2048, kernel_size=1)
-        #self.ffn2= nn.Conv2d(in_channels=2048, out_channels=channels, kernel_size=1)
-
         self.relu = nn.ReLU(inplace=True)
-
         inter_channels = channels//H
         for i in range(H):
             self.multi_head_attention.append(Temporal_Attention(channels,inter_channels,T,A,inherent))
@@ -39,12 +34,6 @@ class Multi_Head_Temporal_Attention(nn.Module):
         else:
             self.cls_token = None
 
-        #init = 'xavier'
-        #if init == 'xavier':
-            #self.apply(self._init_weights_xavier)
-        #else:
-            #self.apply(self._init_weights_trunc_normal)
-
         self.pe = pe
         if with_cls_token:
             PE_LEN = T+1
@@ -53,28 +42,6 @@ class Multi_Head_Temporal_Attention(nn.Module):
 
         if self.pe:
             self.pos_embedding = nn.Parameter(torch.randn(1,  PE_LEN, self.emb_dim))
-
-    def _init_weights_trunc_normal(self, m):
-        if isinstance(m, nn.Linear):
-            logging.info('=> init weight of Linear from trunc norm')
-            trunc_normal_(m.weight, std=0.02)
-            if m.bias is not None:
-                logging.info('=> init bias of Linear to zeros')
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, (nn.LayerNorm, nn.BatchNorm2d)):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-
-    def _init_weights_xavier(self, m):
-        if isinstance(m, nn.Linear):
-            logging.info('=> init weight of Linear from xavier uniform')
-            nn.init.xavier_uniform_(m.weight)
-            if m.bias is not None:
-                logging.info('=> init bias of Linear to zeros')
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, (nn.LayerNorm, nn.BatchNorm2d)):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
 
     def forward(self,x):
 

@@ -1,5 +1,5 @@
-log_dir: ./log
-model_saved_dir: ./output
+log_dir: ./log/04
+model_saved_dir: ./output/04
 # feeder
 feeder: pre_data.feeder.Feeder
 train_feeder_args:
@@ -13,12 +13,12 @@ train_feeder_args:
   normalization: False
 
 test_feeder_args:
-  data_path: ./test_joint_A.npy
-  label_path: ./data/test_label_A.npy
+  data_path: ./data/test_joint.npy
+  label_path: ./data/test_label.npy
 
 # model
 model: model.dmodel.Model
-model_path: './output/best_weights.pt'
+model_path: './output/04/weights.pt'
 model_args:
   num_class: 155
   num_point: 17
@@ -28,13 +28,17 @@ model_args:
     labeling_mode: 'spatial'
 
 #optim
-weight_decay: 0.0001
-base_lr: 5e-3
-step: [30, 40]
+weight_decay: 1e-2
+base_lr: 1e-4
 
 # training
 device: 0
-batch_size: 2
-test_batch_size: 8
-num_epoch: 10
+batch_size: 64
+num_epoch: 100
 nesterov: True
+
+# testing
+test_path: '/home/user50102/.conda/envs/sxc/Skelton/output/weights.pt'
+test_batch_size: 128
+test_device: 1
+test_log_dir: ./log

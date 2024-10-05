@@ -3,6 +3,7 @@ import yaml
 import os
 import torch
 import numpy as np
+import test
 from tqdm import tqdm
 from pre_data.feeder import Feeder
 import pre_data.graph
@@ -29,6 +30,7 @@ class Leaner():
         self.device = torch.device('cuda:{}'.format(self.arg.device))
         self.loss = torch.nn.CrossEntropyLoss()
         self.max_acc = 0.5
+        self.tester = test.Val(arg)
 
     def print_log(self, str):
         print(str)
@@ -73,7 +75,7 @@ class Leaner():
         self.model.to(self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(),
                                           lr=float(self.arg.base_lr),
-                                          weight_decay=self.arg.weight_decay)
+                                          weight_decay=float(self.arg.weight_decay))
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         # for state in self.optimizer.state.values():
         #     for k, v in state.items():
@@ -83,21 +85,20 @@ class Leaner():
         self.max_acc = checkpoint['max_acc']
         print(f'loaded checkpoint from {self.arg.model_path}')
 
-    def train(self, epoch):
+    def train(self, epochs):
         if os.path.exists(self.arg.model_path):
             self.load_from_checkpoint()
         else:
             self.model.to(self.device)
             self.optimizer = torch.optim.AdamW(self.model.parameters(),
                                               lr=float(self.arg.base_lr),
-                                              weight_decay=self.arg.weight_decay)
+                                              weight_decay=float(self.arg.weight_decay))
         self.model.train()
-        self.print_log(f'Training epoch: {epoch}')
         self.print_log(f'\t===== training from global steps {self.global_step} =====')
-        self.epoch = epoch
-        self.train_writer.add_scalar('epoch', epoch, self.global_step)
+        self.epochs = epochs
         mean_acc = 0
-        for epoch in range(epoch):
+        max_test_acc = 0.65
+        for epoch in range(epochs):
             loss_value = []
             acc_value = []
             for data, label in tqdm(self.dataloader, desc='Training progress epoch {}'.format(epoch)):
@@ -136,9 +137,18 @@ class Leaner():
                 self.max_acc = mean_acc
                 self.save_to_checkpoint(self.state_dict(), f'weights_acc_{self.max_acc:.4f}')
                 self.save_to_checkpoint(self.state_dict(), f'best_weights')
+            self.print_log(f'Training epoch: {epoch}')
             self.print_log(f'\tMean training loss: {np.mean(loss_value):.4f}')
             self.print_log(f'\tMean training acc: {mean_acc:.4f}')
             self.print_log(f'\tMax training acc: {self.max_acc:.4f}')
+            # testing
+            self.tester.test(epoch)
+            if self.tester.max_acc > max_test_acc:
+                self.save_to_checkpoint(self.state_dict(), 'best_test_weights')
+            if max_test_acc != 0.65 and max_test_acc - self.tester.acc > 0.05:
+                self.print_log('Model Already OverFitting!')
+                break
+            max_test_acc = self.tester.max_acc
             self.print_log(f'\t============ global steps {self.global_step} ============')
 
         self.save_to_checkpoint(self.state_dict(), f'last_weights_{mean_acc:.4f}')
