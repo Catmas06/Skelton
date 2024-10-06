@@ -10,7 +10,15 @@ import pre_data.graph
 from model.dmodel import Model
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data.distributed import DistributedSampler
+from torch.multiprocessing import spawn
+from torch.nn.parallel import DistributedDataParallel
 
+
+def _get_free_port():
+    import socketserver
+    with socketserver.TCPServer(('localhost', 0), None) as s:
+        return s.server_address[1]
 
 class Leaner():
     def __init__(self, arg):
@@ -29,7 +37,7 @@ class Leaner():
         self.global_step = 0
         self.device = torch.device('cuda:{}'.format(self.arg.device))
         self.loss = torch.nn.CrossEntropyLoss()
-        self.max_acc = 0.5
+        self.max_acc = 0.6
         self.tester = test.Val(arg)
 
     def print_log(self, str):
@@ -52,6 +60,33 @@ class Leaner():
                           self.optimizer.state_dict().items()},
             'max_acc': self.max_acc,
         }
+
+    def load_optimizer(self):
+        if self.arg.optimizer == 'AdamW':
+            self.optimizer = torch.optim.AdamW(self.model.parameters(),
+                                              lr=float(self.arg.base_lr),
+                                              weight_decay=float(self.arg.weight_decay))
+        elif self.arg.optimizer == 'SGD':
+            self.optimizer = torch.optim.SGD(self.model.parameters(),
+                                             lr=float(self.arg.base_lr),
+                                             momentum=0.9,
+                                             nesterov=self.arg.nesterov,
+                                             weight_decay=float(self.arg.weight_decay))
+        else:
+            raise ValueError('Unknown optimizer')
+
+    def adjust_learning_rate(self, epoch):
+        if self.arg.optimizer == 'SGD' or self.arg.optimizer == 'AdamW':
+            if epoch < self.arg.warm_up_epoch:
+                lr = self.arg.base_lr * (epoch + 1) / self.arg.warm_up_epoch
+            else:
+                lr = self.arg.base_lr * (
+                        0.1 ** np.sum(epoch >= np.array(self.arg.step)))
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr
+            return lr
+        else:
+            raise ValueError('Unknown optimizer')
 
     def save_to_checkpoint(self, state_dict, filename='weights'):
         if not os.path.exists(self.arg.model_saved_dir):
@@ -85,7 +120,9 @@ class Leaner():
         self.max_acc = checkpoint['max_acc']
         print(f'loaded checkpoint from {self.arg.model_path}')
 
-    def train(self, epochs):
+    def train(self, epochs, model=None, is_master=False):
+        if model is not None:
+            self.model = model
         if os.path.exists(self.arg.model_path):
             self.load_from_checkpoint()
         else:
@@ -139,8 +176,8 @@ class Leaner():
                 self.save_to_checkpoint(self.state_dict(), f'best_weights')
             self.print_log(f'Training epoch: {epoch}')
             self.print_log(f'\tMean training loss: {np.mean(loss_value):.4f}')
-            self.print_log(f'\tMean training acc: {mean_acc:.4f}')
-            self.print_log(f'\tMax training acc: {self.max_acc:.4f}')
+            self.print_log(f'\tMean training  acc: {mean_acc:.4f}')
+            self.print_log(f'\t Max training  acc: {self.max_acc:.4f}')
             # testing
             self.tester.test(epoch)
             if self.tester.max_acc > max_test_acc:
@@ -152,6 +189,29 @@ class Leaner():
             self.print_log(f'\t============ global steps {self.global_step} ============')
 
         self.save_to_checkpoint(self.state_dict(), f'last_weights_{mean_acc:.4f}')
+
+    def train_distributed(self, replica_id, replica_count, port, epoch):
+        os.environ['MASTER_ADDR'] = 'localhost'
+        os.environ['MASTER_PORT'] = str(port)
+        torch.distributed.init_process_group(
+            'nccl', rank=replica_id, world_size=replica_count)
+        dataset = Feeder(**self.arg.train_feeder_args)
+        self.dataloader = DataLoader(
+            dataset=Feeder(**self.arg.train_feeder_args),
+            batch_size=self.arg.batch_size,
+            shuffle=False,
+            num_workers=4,
+            sampler=DistributedSampler(dataset),
+            drop_last=True,
+            pin_memory=True,
+            persistent_workers=True
+        )
+        device = torch.device('cuda', replica_id)
+        torch.cuda.set_device(device)
+        model = Model(graph=self.arg.model_args['graph'],
+                           graph_args=self.arg.model_args['graph_args']).to(device)
+        model = DistributedDataParallel(model, device_ids=[replica_id])
+        self.train(epoch, model, is_master=replica_id==0)
 
 
 
@@ -170,5 +230,13 @@ if __name__ == '__main__':
 
     arg = parser.parse_args()
     leaner = Leaner(arg)
-    leaner.train(arg.num_epoch)
+    replica_count = torch.cuda.device_count()
+    if replica_count > 1:
+        if arg.batch_size % replica_count != 0:
+            raise ValueError(f'Batch size {arg.batch_size} is not evenly divisble by # GPUs {replica_count}.')
+        arg.batch_size = arg.batch_size // replica_count
+        port = _get_free_port()
+        spawn(leaner.train_distributed, args=(replica_count, port, arg.num_epoch), nprocs=replica_count, join=True)
+    else:
+        leaner.train(arg.num_epoch)
 
