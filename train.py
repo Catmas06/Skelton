@@ -29,7 +29,7 @@ class Leaner():
         self.global_step = 0
         self.device = torch.device('cuda:{}'.format(self.arg.device))
         self.loss = torch.nn.CrossEntropyLoss()
-        self.max_acc = 0.5
+        self.max_acc = 0.6
         self.tester = test.Val(arg)
 
     def print_log(self, str):
@@ -53,6 +53,30 @@ class Leaner():
             'max_acc': self.max_acc,
         }
 
+    def load_optimizer(self):
+        if self.arg.optimizer == 'AdamW':
+            self.optimizer = torch.optim.AdamW(self.model.parameters(),
+                                              lr=float(self.arg.base_lr),
+                                              weight_decay=float(self.arg.weight_decay))
+        elif self.arg.optimizer == 'SGD':
+            self.optimizer = torch.optim.SGD(self.model.parameters(),
+                                             lr=float(self.arg.base_lr),
+                                             momentum=0.9,
+                                             nesterov=self.arg.nesterov,
+                                             weight_decay=float(self.arg.weight_decay))
+        else:
+            raise ValueError('Unknown optimizer')
+
+    def adjust_learning_rate(self, epoch):
+        if self.arg.optimizer == 'SGD' or self.arg.optimizer == 'AdamW':
+            lr = float(self.arg.base_lr) * (
+                    0.1 ** np.sum(epoch >= np.array(self.arg.step)))
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr
+            return lr
+        else:
+            raise ValueError('Unknown optimizer')
+
     def save_to_checkpoint(self, state_dict, filename='weights'):
         if not os.path.exists(self.arg.model_saved_dir):
             os.mkdir(self.arg.model_saved_dir)
@@ -73,9 +97,7 @@ class Leaner():
         else:
             self.model.load_state_dict(checkpoint['model'])
         self.model.to(self.device)
-        self.optimizer = torch.optim.AdamW(self.model.parameters(),
-                                          lr=float(self.arg.base_lr),
-                                          weight_decay=float(self.arg.weight_decay))
+        self.load_optimizer()
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         # for state in self.optimizer.state.values():
         #     for k, v in state.items():
@@ -90,9 +112,7 @@ class Leaner():
             self.load_from_checkpoint()
         else:
             self.model.to(self.device)
-            self.optimizer = torch.optim.AdamW(self.model.parameters(),
-                                              lr=float(self.arg.base_lr),
-                                              weight_decay=float(self.arg.weight_decay))
+            self.load_optimizer()
         self.model.train()
         self.print_log(f'\t===== training from global steps {self.global_step} =====')
         self.epochs = epochs
@@ -101,6 +121,7 @@ class Leaner():
         for epoch in range(epochs):
             loss_value = []
             acc_value = []
+            lr = self.adjust_learning_rate(epoch)
             for data, label in tqdm(self.dataloader, desc='Training progress epoch {}'.format(epoch)):
                 self.global_step += 1
                 # data [N, 12, 300, 17, 2]
@@ -137,10 +158,10 @@ class Leaner():
                 self.max_acc = mean_acc
                 self.save_to_checkpoint(self.state_dict(), f'weights_acc_{self.max_acc:.4f}')
                 self.save_to_checkpoint(self.state_dict(), f'best_weights')
-            self.print_log(f'Training epoch: {epoch}')
+            self.print_log(f'Training epoch: {epoch} with lr={lr}')
             self.print_log(f'\tMean training loss: {np.mean(loss_value):.4f}')
-            self.print_log(f'\tMean training acc: {mean_acc:.4f}')
-            self.print_log(f'\tMax training acc: {self.max_acc:.4f}')
+            self.print_log(f'\tMean training  acc: {mean_acc:.4f}')
+            self.print_log(f'\t Max training  acc: {self.max_acc:.4f}')
             # testing
             self.tester.test(epoch)
             if self.tester.max_acc > max_test_acc:

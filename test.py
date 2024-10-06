@@ -71,8 +71,8 @@ class Val():
             if self.acc > self.max_acc:
                 self.max_acc = self.acc
             self.print_log(f'\tMean testing loss: {self.loss:.4f}')
-            self.print_log(f'\tMean testing acc: {self.acc:.4f}.')
-            self.print_log(f'\t Max testing acc: {self.max_acc:.4f}')
+            self.print_log(f'\tMean testing  acc: {self.acc:.4f}')
+            self.print_log(f'\t Max testing  acc: {self.max_acc:.4f}')
 
 
 # Press the green button in the gutter to run the script.
