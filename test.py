@@ -24,6 +24,7 @@ class Val():
                            graph_args=self.arg.model_args['graph_args'])
         self.device = torch.device('cuda:{}'.format(self.arg.test_device))
         self.loss_func = torch.nn.CrossEntropyLoss()
+        self.test_writer = torch.utils.tensorboard.SummaryWriter(os.path.join(arg.log_dir, 'test'), 'test')
         self.acc = 0
         self.loss = 100
         self.max_acc = 0.65
@@ -70,6 +71,8 @@ class Val():
             self.loss = np.mean(loss_value)
             if self.acc > self.max_acc:
                 self.max_acc = self.acc
+            self.test_writer.add_scalar('acc', self.acc, epoch*self.arg.batch_size*torch.cuda.device_count())
+            self.test_writer.add_scalar('loss', self.loss, epoch*self.arg.batch_size*torch.cuda.device_count())
             self.print_log(f'\tMean  testing loss: {self.loss:.4f}')
             self.print_log(f'\tMean  testing  acc: {self.acc:.4f}')
             self.print_log(f'\t Max  testing  acc: {self.max_acc:.4f}')

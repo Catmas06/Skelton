@@ -130,12 +130,12 @@ class Leaner():
         self.model.train()
         if is_master:
             self.print_log(f'\t===== training from global steps {self.global_step} =====')
-        self.epochs = epochs
         mean_acc = 0
         max_test_acc = 0.65
-        for epoch in range(epochs):
+        for epoch in range(self.global_step//(self.arg.batch_size*torch.cuda.device_count()),epochs):
             loss_value = []
             acc_value = []
+            lr = self.adjust_learning_rate(epoch)
             for data, label in tqdm(self.dataloader, desc='Training progress epoch {}'.format(epoch)) \
                     if is_master else self.dataloader:
                 self.global_step += 1
