@@ -23,16 +23,6 @@ def _get_free_port():
 class Leaner():
     def __init__(self, arg):
         self.arg = arg
-        self.dataloader = DataLoader(
-            dataset=Feeder(**self.arg.train_feeder_args),
-            batch_size=self.arg.batch_size,
-            shuffle=True,
-            num_workers=0,
-            drop_last=True,
-            pin_memory=True,
-        )
-        self.model = Model(graph=self.arg.model_args['graph'],
-                           graph_args=self.arg.model_args['graph_args'])
         self.train_writer = SummaryWriter(os.path.join(arg.log_dir, 'train'), 'train')
         self.global_step = 0
         self.device = torch.device('cuda:{}'.format(self.arg.device))
@@ -120,9 +110,23 @@ class Leaner():
         self.max_acc = checkpoint['max_acc']
         print(f'loaded checkpoint from {self.arg.model_path}')
 
-    def train(self, epochs, model=None, is_master=False):
+    def train(self, epochs, dataloader=None, model=None, is_master=True):
         if model is not None:
             self.model = model
+        else:
+            self.model = Model(graph=self.arg.model_args['graph'],
+                               graph_args=self.arg.model_args['graph_args'])
+        if dataloader is None:
+            self.dataloader = DataLoader(
+                dataset=Feeder(**self.arg.train_feeder_args),
+                batch_size=self.arg.batch_size,
+                shuffle=True,
+                num_workers=0,
+                drop_last=True,
+                pin_memory=True,
+            )
+        else:
+            self.dataloader = dataloader
         if os.path.exists(self.arg.model_path):
             self.load_from_checkpoint()
         else:
@@ -131,14 +135,17 @@ class Leaner():
                                               lr=float(self.arg.base_lr),
                                               weight_decay=float(self.arg.weight_decay))
         self.model.train()
-        self.print_log(f'\t===== training from global steps {self.global_step} =====')
+        if is_master:
+            self.print_log(f'\t===== training from global steps {self.global_step} =====')
         self.epochs = epochs
         mean_acc = 0
         max_test_acc = 0.65
         for epoch in range(epochs):
             loss_value = []
             acc_value = []
-            for data, label in tqdm(self.dataloader, desc='Training progress epoch {}'.format(epoch)):
+            # self.dataloader.sampler.set_epoch(epoch)
+            for data, label in tqdm(self.dataloader, desc='Training progress epoch {}'.format(epoch)) \
+                    if is_master else self.dataloader:
                 self.global_step += 1
                 # data [N, 12, 300, 17, 2]
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
@@ -158,60 +165,69 @@ class Leaner():
                 value, predict_label = torch.max(output.data, 1)
                 now_acc = torch.mean((predict_label == label.data).float()).item()
                 acc_value.append(now_acc)
-                self.train_writer.add_scalar('acc', now_acc, self.global_step)
-                self.train_writer.add_scalar('loss', loss.data.item(), self.global_step)
+                if is_master:
+                    self.train_writer.add_scalar('acc', now_acc, self.global_step)
+                    self.train_writer.add_scalar('loss', loss.data.item(), self.global_step)
 
                 # statistics
                 self.lr = self.optimizer.param_groups[0]['lr']
                 self.train_writer.add_scalar('lr', self.lr, self.global_step)
 
-            # save model after one epoch
-            self.save_to_checkpoint(self.state_dict())
-
             # save the best model
-            mean_acc = np.mean(acc_value)
-            if mean_acc > self.max_acc:
-                self.max_acc = mean_acc
-                self.save_to_checkpoint(self.state_dict(), f'weights_acc_{self.max_acc:.4f}')
-                self.save_to_checkpoint(self.state_dict(), f'best_weights')
-            self.print_log(f'Training epoch: {epoch}')
-            self.print_log(f'\tMean training loss: {np.mean(loss_value):.4f}')
-            self.print_log(f'\tMean training  acc: {mean_acc:.4f}')
-            self.print_log(f'\t Max training  acc: {self.max_acc:.4f}')
-            # testing
-            self.tester.test(epoch)
-            if self.tester.max_acc > max_test_acc:
-                self.save_to_checkpoint(self.state_dict(), 'best_test_weights')
-            if max_test_acc != 0.65 and max_test_acc - self.tester.acc > 0.05:
-                self.print_log('Model Already OverFitting!')
-                break
-            max_test_acc = self.tester.max_acc
-            self.print_log(f'\t============ global steps {self.global_step} ============')
+            mean_acc = torch.Tensor([np.mean(acc_value),]).to(self.device)
+            torch.distributed.all_reduce(mean_acc, op=torch.distributed.ReduceOp.SUM)
+            mean_acc /= torch.distributed.get_world_size()
+            mean_loss = torch.Tensor([np.mean(loss_value),]).to(self.device)
+            torch.distributed.all_reduce(mean_loss, op=torch.distributed.ReduceOp.SUM)
+            mean_loss /= torch.distributed.get_world_size()
+            mean_acc = mean_acc.item()
+            mean_loss = mean_loss.item()
+            if is_master:
+                # save model after one epoch
+                self.save_to_checkpoint(self.state_dict())
+                if mean_acc > self.max_acc:
+                    self.max_acc = mean_acc
+                    self.save_to_checkpoint(self.state_dict(), f'weights_acc_{self.max_acc:.4f}')
+                    self.save_to_checkpoint(self.state_dict(), f'best_weights')
+                self.print_log(f'Training epoch: {epoch}')
+                self.print_log(f'\tMean training loss: {mean_loss:.4f}')
+                self.print_log(f'\tMean training  acc: {mean_acc:.4f}')
+                self.print_log(f'\t Max training  acc: {self.max_acc:.4f}')
+                # testing
+                self.tester.test(epoch)
+                if self.tester.max_acc > max_test_acc:
+                    self.save_to_checkpoint(self.state_dict(), 'best_test_weights')
+                if max_test_acc != 0.65 and max_test_acc - self.tester.acc > 0.05:
+                    self.print_log('Model Already OverFitting!')
+                    break
+                max_test_acc = self.tester.max_acc
+                self.print_log(f'\t============ global steps {self.global_step} ============')
+        if is_master:
+            self.save_to_checkpoint(self.state_dict(), f'last_weights_{mean_acc:.4f}')
 
-        self.save_to_checkpoint(self.state_dict(), f'last_weights_{mean_acc:.4f}')
-
-    def train_distributed(self, replica_id, replica_count, port, epoch):
-        os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = str(port)
-        torch.distributed.init_process_group(
-            'nccl', rank=replica_id, world_size=replica_count)
-        dataset = Feeder(**self.arg.train_feeder_args)
-        self.dataloader = DataLoader(
-            dataset=Feeder(**self.arg.train_feeder_args),
-            batch_size=self.arg.batch_size,
-            shuffle=False,
-            num_workers=4,
-            sampler=DistributedSampler(dataset),
-            drop_last=True,
-            pin_memory=True,
-            persistent_workers=True
-        )
-        device = torch.device('cuda', replica_id)
-        torch.cuda.set_device(device)
-        model = Model(graph=self.arg.model_args['graph'],
-                           graph_args=self.arg.model_args['graph_args']).to(device)
-        model = DistributedDataParallel(model, device_ids=[replica_id])
-        self.train(epoch, model, is_master=replica_id==0)
+def train_distributed(replica_id, replica_count, port, arg):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = str(port)
+    torch.distributed.init_process_group(
+        'nccl', rank=replica_id, world_size=replica_count)
+    leaner = Leaner(arg)
+    leaner.device = torch.device('cuda', replica_id)
+    torch.cuda.set_device(leaner.device)
+    dataset = Feeder(**arg.train_feeder_args, is_master=replica_id==0)
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=arg.batch_size,
+        shuffle=False,
+        num_workers=2,
+        sampler=DistributedSampler(dataset),
+        pin_memory=True,
+        drop_last=True,
+        persistent_workers=True
+    )
+    model = Model(graph=arg.model_args['graph'],
+                  graph_args=arg.model_args['graph_args']).to(leaner.device)
+    model = DistributedDataParallel(model, device_ids=[replica_id])
+    leaner.train(arg.num_epoch, dataloader, model, is_master=replica_id==0)
 
 
 
@@ -236,7 +252,7 @@ if __name__ == '__main__':
             raise ValueError(f'Batch size {arg.batch_size} is not evenly divisble by # GPUs {replica_count}.')
         arg.batch_size = arg.batch_size // replica_count
         port = _get_free_port()
-        spawn(leaner.train_distributed, args=(replica_count, port, arg.num_epoch), nprocs=replica_count, join=True)
+        spawn(train_distributed, args=(replica_count, port, arg), nprocs=replica_count, join=True)
     else:
         leaner.train(arg.num_epoch)
 

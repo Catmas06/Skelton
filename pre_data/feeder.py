@@ -22,9 +22,8 @@ class Feeder(Dataset):
     """
     def __init__(self, data_path, label_path,
                  random_choose=False, random_shift=False, random_move=False,
-                 window_size=-1, normalization=False, debug=False, use_mmap=True):
-
-
+                 window_size=-1, normalization=False, debug=False, use_mmap=True,
+                 is_master=True):
         self.debug = debug
         self.data_path = data_path
         self.label_path = label_path
@@ -34,7 +33,9 @@ class Feeder(Dataset):
         self.window_size = window_size
         self.normalization = normalization
         self.use_mmap = use_mmap
+        self.is_master = is_master
         self.load_data()
+
         if normalization:
             self.get_mean_map()
 
@@ -55,8 +56,8 @@ class Feeder(Dataset):
         else:
             self.data = np.load(self.data_path)
         N, C, T, V, M = self.data.shape
-        gen_modal.gen_bone(self.set, debug=self.debug)
-        gen_modal.merge_joint_bone_data(self.set, debug=self.debug)
+        gen_modal.gen_bone(self.set, debug=self.debug, is_master=self.is_master)
+        gen_modal.merge_joint_bone_data(self.set, debug=self.debug, is_master=self.is_master)
         if not os.path.exists(f'./data/{self.set}_joint_bone_motion.npy'):
             motion = np.load(f'./data/{self.set}_joint_bone.npy')
             self.data = np.array(motion)
@@ -68,7 +69,8 @@ class Feeder(Dataset):
             np.save(f'./data/{self.set}_joint_bone_motion.npy', self.data)
         else:
             self.data = np.load(f'./data/{self.set}_joint_bone_motion.npy')
-            print('data already prepared')
+            if self.is_master:
+                print('data already prepared')
         if self.debug:
             self.label = self.label[0:100]
             self.data = self.data[0:100]
