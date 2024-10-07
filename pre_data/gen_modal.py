@@ -22,9 +22,10 @@ parts = {'joint', 'bone'}
 graph = ((10, 8), (8, 6), (9, 7), (7, 5), (15, 13), (13, 11), (16, 14), (14, 12), (11, 5), (12, 6), (11, 12), (5, 6), (5, 0), (6, 0), (1, 0), (2, 0), (3, 1), (4, 2))
 
 # bone
-def gen_bone(set, debug=False):
+def gen_bone(set, debug=False, is_master=True):
     if os.path.exists(f'./data/{set}_bone.npy'):
-        print('bone modality already exists')
+        if is_master:
+            print('bone modality already exists')
         return
     data = open_memmap('./data/{}_joint.npy'.format(set),mode='r')
     if debug:
@@ -37,9 +38,10 @@ def gen_bone(set, debug=False):
         fp_sp[:, :, :, v1, :] = data[:, :, :, v1, :] - data[:, :, :, v2, :]
 
 # jmb
-def merge_joint_bone_data(set, debug=False):
+def merge_joint_bone_data(set, debug=False, is_master=True):
     if os.path.exists(f'./data/{set}_joint_bone.npy'):
-        print('joint_bone modality already exists')
+        if is_master:
+            print('joint_bone modality already exists')
         return
     data_jpt = open_memmap('./data/{}_joint.npy'.format(set), mode='r')
     data_bone = open_memmap('./data/{}_bone.npy'.format(set), mode='r')

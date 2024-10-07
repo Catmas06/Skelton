@@ -14,7 +14,7 @@ class Val():
     def __init__(self, arg):
         self.arg = arg
         self.dataloader = DataLoader(
-            dataset=Feeder(**self.arg.test_feeder_args),
+            dataset=Feeder(**self.arg.test_feeder_args, is_master=False),
             batch_size=self.arg.test_batch_size,
             shuffle=False,
             num_workers=0,
@@ -47,7 +47,7 @@ class Val():
         with open('{}/log.txt'.format(self.arg.log_dir), 'a') as f:
             print(str, file=f)
 
-    def test(self, epoch, save_model=False):
+    def test(self, epoch):
         self.load_from_checkpoint()
         self.model.eval()
         global_acc = []
@@ -70,9 +70,9 @@ class Val():
             self.loss = np.mean(loss_value)
             if self.acc > self.max_acc:
                 self.max_acc = self.acc
-            self.print_log(f'\tMean testing loss: {self.loss:.4f}')
-            self.print_log(f'\tMean testing  acc: {self.acc:.4f}')
-            self.print_log(f'\t Max testing  acc: {self.max_acc:.4f}')
+            self.print_log(f'\tMean  testing loss: {self.loss:.4f}')
+            self.print_log(f'\tMean  testing  acc: {self.acc:.4f}')
+            self.print_log(f'\t Max  testing  acc: {self.max_acc:.4f}')
 
 
 # Press the green button in the gutter to run the script.
