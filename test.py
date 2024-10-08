@@ -44,11 +44,11 @@ class Val():
     def print_log(self, str):
         print(str)
         if not os.path.exists(self.arg.log_dir):
-            os.mkdir(self.arg.work_dir)
+            os.makedirs(self.arg.work_dir)
         with open('{}/log.txt'.format(self.arg.log_dir), 'a') as f:
             print(str, file=f)
 
-    def test(self, epoch):
+    def test(self, epoch, data_len):
         self.load_from_checkpoint()
         self.model.eval()
         global_acc = []
@@ -71,8 +71,8 @@ class Val():
             self.loss = np.mean(loss_value)
             if self.acc > self.max_acc:
                 self.max_acc = self.acc
-            self.test_writer.add_scalar('acc', self.acc, epoch*self.arg.batch_size*self.arg.device_count+1)
-            self.test_writer.add_scalar('loss', self.loss, epoch*self.arg.batch_size*self.arg.device_count+1)
+            self.test_writer.add_scalar('acc', self.acc, (epoch+1)*data_len)
+            self.test_writer.add_scalar('loss', self.loss, (epoch+1)*data_len+1)
             self.print_log(f'\tMean  testing loss: {self.loss:.4f}')
             self.print_log(f'\tMean  testing  acc: {self.acc:.4f}')
             self.print_log(f'\t Max  testing  acc: {self.max_acc:.4f}')

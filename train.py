@@ -33,7 +33,7 @@ class Leaner():
     def print_log(self, str):
         print(str)
         if not os.path.exists(self.arg.log_dir):
-            os.mkdir(self.arg.work_dir)
+            os.makedirs(self.arg.work_dir)
         with open('{}/log.txt'.format(self.arg.log_dir), 'a') as f:
             print(str, file=f)
 
@@ -77,7 +77,7 @@ class Leaner():
 
     def save_to_checkpoint(self, state_dict, filename='weights'):
         if not os.path.exists(self.arg.model_saved_dir):
-            os.mkdir(self.arg.model_saved_dir)
+            os.makedirs(self.arg.model_saved_dir)
         link_name = f'{self.arg.model_saved_dir}/{filename}.pt'
         save_name = f'{self.arg.model_saved_dir}/temp_{filename}.pt'
         if os.path.exists(link_name):
@@ -133,7 +133,7 @@ class Leaner():
             self.print_log(f'\t===== training from global steps {self.global_step} =====')
         mean_acc = 0
         max_test_acc = 0.65
-        for epoch in range(self.global_step//(self.arg.batch_size*self.arg.device_count),epochs):
+        for epoch in range(self.global_step//len(self.dataloader),epochs):
             loss_value = []
             acc_value = []
             lr = self.adjust_learning_rate(epoch)
@@ -141,7 +141,8 @@ class Leaner():
                 sampler.set_epoch(epoch)
             for data, label in tqdm(self.dataloader, desc='Training progress epoch {}'.format(epoch)) \
                     if is_master else self.dataloader:
-                self.global_step += 1
+                if is_master:
+                    self.global_step += 1
                 # data [N, 12, 300, 17, 2]
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
                 # label [N,]
@@ -192,7 +193,7 @@ class Leaner():
                 self.print_log(f'\tMean training  acc: {mean_acc:.4f}')
                 self.print_log(f'\t Max training  acc: {self.max_acc:.4f}')
                 # testing
-                self.tester.test(epoch)
+                self.tester.test(epoch, len(self.dataloader))
                 if self.tester.max_acc > max_test_acc:
                     self.save_to_checkpoint(self.state_dict(), 'best_test_weights')
                 if max_test_acc != 0.65 and max_test_acc - self.tester.acc > 0.05:
