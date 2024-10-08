@@ -71,8 +71,8 @@ class Val():
             self.loss = np.mean(loss_value)
             if self.acc > self.max_acc:
                 self.max_acc = self.acc
-            self.test_writer.add_scalar('acc', self.acc, epoch*self.arg.batch_size*torch.cuda.device_count())
-            self.test_writer.add_scalar('loss', self.loss, epoch*self.arg.batch_size*torch.cuda.device_count())
+            self.test_writer.add_scalar('acc', self.acc, epoch*self.arg.batch_size*self.arg.device_count+1)
+            self.test_writer.add_scalar('loss', self.loss, epoch*self.arg.batch_size*self.arg.device_count+1)
             self.print_log(f'\tMean  testing loss: {self.loss:.4f}')
             self.print_log(f'\tMean  testing  acc: {self.acc:.4f}')
             self.print_log(f'\t Max  testing  acc: {self.max_acc:.4f}')

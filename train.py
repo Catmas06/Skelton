@@ -27,7 +27,7 @@ class Leaner():
         self.global_step = 0
         self.device = torch.device('cuda:{}'.format(self.arg.device))
         self.loss = torch.nn.CrossEntropyLoss()
-        self.max_acc = 0.6
+        self.max_acc = 0.7
         self.tester = test.Val(arg)
 
     def print_log(self, str):
@@ -122,6 +122,7 @@ class Leaner():
             )
         else:
             self.dataloader = dataloader
+        sampler = self.dataloader.sampler if dataloader is not None else None
         if os.path.exists(self.arg.model_path):
             self.load_from_checkpoint()
         else:
@@ -132,10 +133,12 @@ class Leaner():
             self.print_log(f'\t===== training from global steps {self.global_step} =====')
         mean_acc = 0
         max_test_acc = 0.65
-        for epoch in range(self.global_step//(self.arg.batch_size*torch.cuda.device_count()),epochs):
+        for epoch in range(self.global_step//(self.arg.batch_size*self.arg.device_count),epochs):
             loss_value = []
             acc_value = []
             lr = self.adjust_learning_rate(epoch)
+            if sampler is not None:
+                sampler.set_epoch(epoch)
             for data, label in tqdm(self.dataloader, desc='Training progress epoch {}'.format(epoch)) \
                     if is_master else self.dataloader:
                 self.global_step += 1
@@ -143,7 +146,6 @@ class Leaner():
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
                 # label [N,]
                 label = torch.as_tensor(label, dtype=torch.int64, device=self.device).detach()
-
                 # forward
                 output = self.model(data)
                 loss = self.loss(output, label)
@@ -166,14 +168,18 @@ class Leaner():
                 self.train_writer.add_scalar('lr', self.lr, self.global_step)
 
             # save the best model
-            mean_acc = torch.Tensor([np.mean(acc_value),]).to(self.device)
-            torch.distributed.all_reduce(mean_acc, op=torch.distributed.ReduceOp.SUM)
-            mean_acc /= torch.distributed.get_world_size()
-            mean_loss = torch.Tensor([np.mean(loss_value),]).to(self.device)
-            torch.distributed.all_reduce(mean_loss, op=torch.distributed.ReduceOp.SUM)
-            mean_loss /= torch.distributed.get_world_size()
-            mean_acc = mean_acc.item()
-            mean_loss = mean_loss.item()
+            if self.arg.distributed:
+                mean_acc = torch.Tensor([np.mean(acc_value),]).to(self.device)
+                torch.distributed.all_reduce(mean_acc, op=torch.distributed.ReduceOp.SUM)
+                mean_acc /= torch.distributed.get_world_size()
+                mean_loss = torch.Tensor([np.mean(loss_value),]).to(self.device)
+                torch.distributed.all_reduce(mean_loss, op=torch.distributed.ReduceOp.SUM)
+                mean_loss /= torch.distributed.get_world_size()
+                mean_acc = mean_acc.item()
+                mean_loss = mean_loss.item()
+            else:
+                mean_acc = np.mean(acc_value)
+                mean_loss = np.mean(loss_value)
             if is_master:
                 # save model after one epoch
                 self.save_to_checkpoint(self.state_dict())
@@ -238,13 +244,17 @@ if __name__ == '__main__':
 
     arg = parser.parse_args()
     leaner = Leaner(arg)
+    if not arg.distributed:
+        arg.device_count = 1
+    if arg.device_count > torch.cuda.device_count():
+        raise ValueError('Not enough GPUs in your system')
     replica_count = torch.cuda.device_count()
-    if replica_count > 1:
-        if arg.batch_size % replica_count != 0:
-            raise ValueError(f'Batch size {arg.batch_size} is not evenly divisble by # GPUs {replica_count}.')
-        arg.batch_size = arg.batch_size // replica_count
+    if arg.distributed and arg.device_count > 1:
+        if arg.batch_size % arg.device_count != 0:
+            raise ValueError(f'Batch size {arg.batch_size} is not evenly divisble by # GPUs {arg.device_count}.')
+        arg.batch_size = arg.batch_size // arg.device_count
         port = _get_free_port()
-        spawn(train_distributed, args=(replica_count, port, arg), nprocs=replica_count, join=True)
+        spawn(train_distributed, args=(arg.device_count, port, arg), nprocs=arg.device_count, join=True)
     else:
         leaner.train(arg.num_epoch)
 
