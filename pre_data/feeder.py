@@ -22,8 +22,8 @@ class Feeder(Dataset):
     """
     def __init__(self, data_path, label_path,
                  random_choose=False, random_shift=False, random_move=False,
-                 window_size=-1, normalization=False, debug=False, use_mmap=True,
-                 is_master=True):
+                 window_size=-1, normalization=False, debug=False, use_mmap=False,
+                 is_master=True, p_interval=[1]):
         self.debug = debug
         self.data_path = data_path
         self.label_path = label_path
@@ -35,6 +35,7 @@ class Feeder(Dataset):
         self.use_mmap = use_mmap
         self.is_master = is_master
         self.load_data()
+        self.p_interval = p_interval
 
         if normalization:
             self.get_mean_map()
@@ -92,17 +93,20 @@ class Feeder(Dataset):
         data_numpy = self.data[index]
         label = self.label[index]
         data_numpy = np.array(data_numpy)
-
-        if self.normalization:
-            data_numpy = (data_numpy - self.mean_map) / self.std_map
-        if self.random_shift:
-            data_numpy = tools.random_shift(data_numpy)
-        if self.random_choose:
-            data_numpy = tools.random_choose(data_numpy, self.window_size)
-        elif self.window_size > 0:
-            data_numpy = tools.auto_pading(data_numpy, self.window_size)
-        if self.random_move:
-            data_numpy = tools.random_move(data_numpy)
+        # random crop
+        if self.window_size!=-1:
+            # valid_frame_num = np.sum(data_numpy.sum(0).sum(-1).sum(-1) != 0)
+            data_numpy = tools.valid_crop_resize(data_numpy, 300, self.p_interval, self.window_size)
+        # if self.normalization:
+        #     data_numpy = (data_numpy - self.mean_map) / self.std_map
+        # if self.random_shift:
+        #     data_numpy = tools.random_shift(data_numpy)
+        # if self.random_choose:
+        #     data_numpy = tools.random_choose(data_numpy, self.window_size)
+        # elif self.window_size > 0:
+        #     data_numpy = tools.auto_pading(data_numpy, self.window_size)
+        # if self.random_move:
+        #     data_numpy = tools.random_move(data_numpy)
 
         return data_numpy, label
 

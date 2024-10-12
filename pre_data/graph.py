@@ -70,6 +70,7 @@ class Graph:
         self.inward = inward
         self.outward = outward
         self.neighbor = neighbor
+        self.A_outward_binary = self._get_adjacency_matrix(self.outward, self.num_node)
 
     def get_adjacency_matrix(self, labeling_mode=None):
         if labeling_mode is None:
@@ -78,6 +79,12 @@ class Graph:
             A = get_spatial_graph(num_node, self_link, inward, outward)
         else:
             raise ValueError()
+        return A
+
+    def _get_adjacency_matrix(self, edges, num_nodes):
+        A = np.zeros((num_nodes, num_nodes), dtype=np.float32)
+        for edge in edges:
+            A[edge] = 1.
         return A
 
 

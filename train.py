@@ -7,7 +7,7 @@ import test
 from tqdm import tqdm
 from pre_data.feeder import Feeder
 import pre_data.graph
-from model.dmodel import Model
+from model.ske_mixf import Model
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
@@ -23,8 +23,8 @@ def _get_free_port():
 class Leaner():
     def __init__(self, arg):
         self.arg = arg
-        self.train_writer = SummaryWriter(os.path.join(arg.log_dir, 'train'), 'train')
         self.global_step = 0
+        self.global_epoch = 0
         self.device = torch.device('cuda:{}'.format(self.arg.device))
         self.loss = torch.nn.CrossEntropyLoss()
         self.max_acc = 0.7
@@ -45,6 +45,7 @@ class Leaner():
             model_state = self.model.state_dict()
         return {
             'global_step': self.global_step,
+            'global_epoch': self.global_epoch,
             'model': {k: v.cpu() if isinstance(v, torch.Tensor) else v for k, v in model_state.items()},
             'optimizer': {k: v.cpu() if isinstance(v, torch.Tensor) else v for k, v in
                           self.optimizer.state_dict().items()},
@@ -67,6 +68,8 @@ class Leaner():
 
     def adjust_learning_rate(self, epoch):
         if self.arg.optimizer == 'SGD' or self.arg.optimizer == 'AdamW':
+            if epoch < self.arg.warm_up_epoch:
+                lr = self.arg.base_lr * (epoch + 1) / self.arg.warm_up_epoch
             lr = float(self.arg.base_lr) * (
                     0.1 ** np.sum(epoch >= np.array(self.arg.step)))
             for param_group in self.optimizer.param_groups:
@@ -103,6 +106,7 @@ class Leaner():
         #             state[k] = v.cuda()
         self.global_step = checkpoint['global_step']
         self.max_acc = checkpoint['max_acc']
+        self.global_epoch = checkpoint['global_epoch']
         print(f'loaded checkpoint from {self.arg.model_path}')
 
     def train(self, epochs, dataloader=None, model=None, is_master=True):
@@ -131,9 +135,10 @@ class Leaner():
         self.model.train()
         if is_master:
             self.print_log(f'\t===== training from global steps {self.global_step} =====')
+            self.train_writer = SummaryWriter(os.path.join(self.arg.log_dir, 'train'), 'train')
         mean_acc = 0
         max_test_acc = 0.65
-        for epoch in range(self.global_step//len(self.dataloader),epochs):
+        for epoch in range(self.global_epoch,epochs):
             loss_value = []
             acc_value = []
             lr = self.adjust_learning_rate(epoch)
@@ -145,6 +150,7 @@ class Leaner():
                     self.global_step += 1
                 # data [N, 12, 300, 17, 2]
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
+                data = data[:,:3,:]
                 # label [N,]
                 label = torch.as_tensor(label, dtype=torch.int64, device=self.device).detach()
                 # forward
@@ -155,18 +161,16 @@ class Leaner():
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                # 写入log
                 loss_value.append(loss.data.item())
                 value, predict_label = torch.max(output.data, 1)
                 now_acc = torch.mean((predict_label == label.data).float()).item()
                 acc_value.append(now_acc)
-                if is_master:
-                    self.train_writer.add_scalar('acc', now_acc, self.global_step)
-                    self.train_writer.add_scalar('loss', loss.data.item(), self.global_step)
-
                 # statistics
-                self.lr = self.optimizer.param_groups[0]['lr']
-                self.train_writer.add_scalar('lr', self.lr, self.global_step)
+                # if is_master:
+                #     self.train_writer.add_scalar('acc', now_acc, self.global_step)
+                #     self.train_writer.add_scalar('loss', loss.data.item(), self.global_step)
+                #     self.lr = self.optimizer.param_groups[0]['lr']
+                #     self.train_writer.add_scalar('lr', self.lr, self.global_step)
 
             # save the best model
             if self.arg.distributed:
@@ -184,6 +188,12 @@ class Leaner():
             if is_master:
                 # save model after one epoch
                 self.save_to_checkpoint(self.state_dict())
+
+                # logging
+                self.train_writer.add_scalar('acc', now_acc, self.global_epoch)
+                self.train_writer.add_scalar('loss', loss.data.item(), self.global_epoch)
+                self.lr = self.optimizer.param_groups[0]['lr']
+                self.train_writer.add_scalar('lr', self.lr, self.global_step)
                 if mean_acc > self.max_acc:
                     self.max_acc = mean_acc
                     self.save_to_checkpoint(self.state_dict(), f'weights_acc_{self.max_acc:.4f}')
@@ -193,14 +203,17 @@ class Leaner():
                 self.print_log(f'\tMean training  acc: {mean_acc:.4f}')
                 self.print_log(f'\t Max training  acc: {self.max_acc:.4f}')
                 # testing
-                self.tester.test(epoch, len(self.dataloader))
+                self.tester.test(epoch)
                 if self.tester.max_acc > max_test_acc:
                     self.save_to_checkpoint(self.state_dict(), 'best_test_weights')
                 if max_test_acc != 0.65 and max_test_acc - self.tester.acc > 0.05:
                     self.print_log('Model Already OverFitting!')
-                    break
+                    return
                 max_test_acc = self.tester.max_acc
                 self.print_log(f'\t============ global steps {self.global_step} ============')
+
+            self.global_epoch += 1
+
         if is_master:
             self.save_to_checkpoint(self.state_dict(), f'last_weights_{mean_acc:.4f}')
 
@@ -225,7 +238,8 @@ def train_distributed(replica_id, replica_count, port, arg):
     )
     model = Model(graph=arg.model_args['graph'],
                   graph_args=arg.model_args['graph_args']).to(leaner.device)
-    model = DistributedDataParallel(model, device_ids=[replica_id])
+    model = DistributedDataParallel(model, device_ids=[replica_id], find_unused_parameters=True)
+    # model = DistributedDataParallel(model, device_ids=[replica_id])
     leaner.train(arg.num_epoch, dataloader, model, is_master=replica_id==0)
 
 
