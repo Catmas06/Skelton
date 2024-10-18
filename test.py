@@ -5,7 +5,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from pre_data.feeder import Feeder
-import pre_data.graph
+import pre_data.graph as graph
 from model.ske_mixf import Model
 from utils import tools
 from torch.utils.data import Dataset, DataLoader
@@ -27,14 +27,14 @@ class NumpyDataset(Dataset):
 class Val():
     def __init__(self, arg):
         self.arg = arg
-        # self.dataloader = DataLoader(
-        #     dataset=Feeder(**self.arg.test_feeder_args, is_master=False),
-        #     batch_size=self.arg.test_batch_size,
-        #     shuffle=False,
-        #     num_workers=0,
-        #     drop_last=False,
-        # )
-        self.model = Model(graph=self.arg.model_args['graph'],
+        self.dataloader = DataLoader(
+            dataset=Feeder(**self.arg.test_feeder_args, is_master=False),
+            batch_size=self.arg.test_batch_size,
+            shuffle=False,
+            num_workers=0,
+            drop_last=False,
+        )
+        self.model = Model(graph=graph.Graph(),
                            graph_args=self.arg.model_args['graph_args'])
         self.device = torch.device('cuda:{}'.format(self.arg.test_device))
         self.loss_func = torch.nn.CrossEntropyLoss()
@@ -42,7 +42,7 @@ class Val():
         self.global_epoch = 0
         self.acc = 0
         self.loss = 100
-        self.max_acc = 0.65
+        self.max_acc = 0.3
 
     def load_from_checkpoint(self):
         path = self.arg.test_path
@@ -74,7 +74,7 @@ class Val():
             for data, label in tqdm(self.dataloader, desc='Testing progress epoch {}'.format(epoch)):
                 # get data [N, 3, 300, 17, 2]
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
-                data = data[:,:3,:]
+                data = data[:,0:3,:]
                 label = torch.as_tensor(label, dtype=torch.int64, device=self.device).detach()
 
                 # forward
@@ -98,29 +98,34 @@ class Val():
             self.print_log(f'\tMean  testing loss: {self.loss:.4f}')
             self.print_log(f'\tMean  testing  acc: {self.acc:.4f}')
             self.print_log(f'\t Max  testing  acc: {self.max_acc:.4f}')
-        np.save(os.path.join(self.arg.confidence_file_path), confidence)
+        # np.save(os.path.join(self.arg.confidence_file_path), confidence)
 
-    def last_test(self, path):
+    def last_test(self, path, confidence_file_path=None):
         self.load_from_checkpoint()
         self.model.eval()
         confidence = None
-        dataset = NumpyDataset(path)
-        loader = DataLoader(
-            dataset=dataset,
-            batch_size=64,
-            shuffle=False,
-            num_workers=0,
-            drop_last=False,
-        )
+        # dataset = NumpyDataset(path)
+        # loader = DataLoader(
+        #     dataset=dataset,
+        #     batch_size=64,
+        #     shuffle=False,
+        #     num_workers=0,
+        #     drop_last=False,
+        # )
         with torch.no_grad():
-            for data in tqdm(loader, desc='Testing progress'):
+            for data in tqdm(self.dataloader, desc='Testing progress'):
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
+                data = data[:,9:12,:]
                 output = self.model(data)
                 if confidence is None:
                     confidence = np.array(np.array(output.cpu()))
                 else:
                     confidence = np.append(confidence, np.array(output.cpu()), axis=0)
-        np.save(os.path.join(self.arg.confidence_file_path), confidence)
+        if confidence_file_path is None:
+            np.save(os.path.join(self.arg.confidence_file_path), confidence)
+        else:
+            np.save(confidence_file_path, confidence)
+        return confidence
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
@@ -141,5 +146,6 @@ if __name__ == '__main__':
 
     arg = parser.parse_args()
     leaner = Val(arg)
-    leaner.last_test('./data/test_joint_B.npy')
+    leaner.last_test('./data/test/test_joint_B.npy')
+    # leaner.test()
 

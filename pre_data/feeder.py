@@ -42,9 +42,9 @@ class Feeder(Dataset):
 
     def load_data(self):
         # data: N C V T M
-        if 'train' in self.data_path:
+        if 'train' in os.path.split(self.data_path)[-1]:
             self.set = 'train'
-        elif 'test' in self.data_path:
+        elif 'test' in os.path.split(self.data_path)[-1]:
             self.set = 'test'
         else:
             raise ValueError('The data_path must contain words train or test')
@@ -59,17 +59,17 @@ class Feeder(Dataset):
         N, C, T, V, M = self.data.shape
         gen_modal.gen_bone(self.set, debug=self.debug, is_master=self.is_master)
         gen_modal.merge_joint_bone_data(self.set, debug=self.debug, is_master=self.is_master)
-        if not os.path.exists(f'./data/{self.set}_joint_bone_motion.npy'):
-            motion = np.load(f'./data/{self.set}_joint_bone.npy')
+        if not os.path.exists(f'./data/train/{self.set}_joint_bone_motion.npy'):
+            motion = np.load(f'./data/train/{self.set}_joint_bone.npy')
             self.data = np.array(motion)
             for t in tqdm(range(T - 1), desc='Generating motion modality'):
                 motion[:, :, t, :, :] = motion[:, :, t + 1, :, :] - motion[:, :, t, :, :]
             motion[:, :, T - 1, :, :] = 0
             # C:[joint, bone, joint_motion, bone_motion] 4*3=12
             self.data = np.concatenate((self.data, motion), axis=1)
-            np.save(f'./data/{self.set}_joint_bone_motion.npy', self.data)
+            np.save(f'./data/train/{self.set}_joint_bone_motion.npy', self.data)
         else:
-            self.data = np.load(f'./data/{self.set}_joint_bone_motion.npy')
+            self.data = np.load(f'./data/train/{self.set}_joint_bone_motion.npy')
             if self.is_master:
                 print('data already prepared')
         if self.debug:
@@ -97,16 +97,16 @@ class Feeder(Dataset):
         if self.window_size!=-1:
             # valid_frame_num = np.sum(data_numpy.sum(0).sum(-1).sum(-1) != 0)
             data_numpy = tools.valid_crop_resize(data_numpy, 300, self.p_interval, self.window_size)
-        # if self.normalization:
-        #     data_numpy = (data_numpy - self.mean_map) / self.std_map
-        # if self.random_shift:
-        #     data_numpy = tools.random_shift(data_numpy)
-        # if self.random_choose:
-        #     data_numpy = tools.random_choose(data_numpy, self.window_size)
-        # elif self.window_size > 0:
-        #     data_numpy = tools.auto_pading(data_numpy, self.window_size)
-        # if self.random_move:
-        #     data_numpy = tools.random_move(data_numpy)
+        if self.normalization:
+            data_numpy = (data_numpy - self.mean_map) / self.std_map
+        if self.random_shift:
+            data_numpy = tools.random_shift(data_numpy)
+        if self.random_choose:
+            data_numpy = tools.random_choose(data_numpy, self.window_size)
+        elif self.window_size > 0:
+            data_numpy = tools.auto_pading(data_numpy, self.window_size)
+        if self.random_move:
+            data_numpy = tools.random_move(data_numpy)
 
         return data_numpy, label
 
@@ -117,6 +117,7 @@ class Feeder(Dataset):
 
 
 if __name__ == '__main__':
-    feeder = Feeder('./data/train_joint.npy', './data/train_label.npy', debug=False)
+    os.chdir('..')
+    feeder = Feeder('./data/train/test_joint.npy', './data/train/test_label.npy', debug=False)
     it, label = feeder.__getitem__(14)
     print(it)

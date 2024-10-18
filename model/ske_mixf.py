@@ -1,19 +1,9 @@
 import torch
 import torch.nn as nn
-# import torch.nn.functional as F
-# from torch.autograd import Variable
 import numpy as np
 import math
-# from einops import rearrange
 from .tem_mixf import Temporal_MixFormer
 from .spa_mixf import Spatial_MixFormer
-
-def import_class(name):
-    components = name.split('.')
-    mod = __import__(components[0])
-    for comp in components[1:]:
-        mod = getattr(mod, comp)
-    return mod
 
 def conv_init(conv):
     nn.init.kaiming_normal_(conv.weight, mode='fan_out')
@@ -61,8 +51,7 @@ class Model(nn.Module):
         if graph is None:
             raise ValueError()
         else:
-            Graph = import_class(graph)
-            self.graph = Graph()
+            self.graph = graph
         A = self.graph.A
         self.A_vector = self.get_A(graph, 8)
         self.num_point = num_point        
@@ -106,8 +95,7 @@ class Model(nn.Module):
                 bn_init(m, 1)
         self.num_class=num_class
         
-    def get_A(self, graph, k):
-        Graph = import_class(graph)()
+    def get_A(self, Graph, k):
         A_outward = Graph.A_outward_binary
         I = np.eye(Graph.num_node)
         return  torch.from_numpy(I - np.linalg.matrix_power(A_outward, k))        

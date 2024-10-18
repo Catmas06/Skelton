@@ -4,9 +4,10 @@ import os
 import torch
 import numpy as np
 import test
+import random
 from tqdm import tqdm
 from pre_data.feeder import Feeder
-import pre_data.graph
+import pre_data.graph as graph
 from model.ske_mixf import Model
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -23,17 +24,30 @@ def _get_free_port():
 class Leaner():
     def __init__(self, arg):
         self.arg = arg
+        seed = random.randint(0,int(1e9))
+        self.print_log(f'seed is set to: {seed}')
+        # self.setup_seed(seed)
         self.global_step = 0
         self.global_epoch = 0
         self.device = torch.device('cuda:{}'.format(self.arg.device))
         self.loss = torch.nn.CrossEntropyLoss()
-        self.max_acc = 0.7
+        self.lr = 0.2
+        self.max_test_acc = 0.3
+        self.max_acc = 0.8
         self.tester = test.Val(arg)
+
+    def setup_seed(self, seed_value):
+        np.random.seed(seed_value)
+        random.seed(seed_value)
+        os.environ['PYTHONHASHSEED'] = str(seed_value)  # 为了禁止hash随机化，使得实验可复现。
+        torch.manual_seed(seed_value)  # 为CPU设置随机种子
+        torch.cuda.manual_seed(seed_value)  # 为当前GPU设置随机种子（只用一块GPU）
+        torch.cuda.manual_seed_all(seed_value)  # 为所有GPU设置随机种子（多块GPU）
 
     def print_log(self, str):
         print(str)
         if not os.path.exists(self.arg.log_dir):
-            os.makedirs(self.arg.work_dir)
+            os.makedirs(self.arg.log_dir)
         with open('{}/log.txt'.format(self.arg.log_dir), 'a') as f:
             print(str, file=f)
 
@@ -50,6 +64,7 @@ class Leaner():
             'optimizer': {k: v.cpu() if isinstance(v, torch.Tensor) else v for k, v in
                           self.optimizer.state_dict().items()},
             'max_acc': self.max_acc,
+            'max_test_acc': self.max_test_acc
         }
 
     def load_optimizer(self):
@@ -89,10 +104,12 @@ class Leaner():
         else:
             torch.save(state_dict, link_name)
 
-    def load_from_checkpoint(self):
-        if not os.path.exists(self.arg.model_path):
-            raise FileNotFoundError(f'path of checkpoint does not exist: {self.arg.model_path}')
-        checkpoint = torch.load(self.arg.model_path, map_location=torch.device('cpu'))
+    def load_from_checkpoint(self, path=None):
+        if path is None:
+            path = self.arg.model_path
+        if not os.path.exists(path):
+            raise FileNotFoundError(f'path of checkpoint does not exist: {path}')
+        checkpoint = torch.load(path, map_location=torch.device('cpu'))
         if hasattr(self.model, 'module') and isinstance(self.model.module, torch.nn.Module):
             self.model.module.load_state_dict(checkpoint['model'])
         else:
@@ -100,27 +117,26 @@ class Leaner():
         self.model.to(self.device)
         self.load_optimizer()
         self.optimizer.load_state_dict(checkpoint['optimizer'])
-        # for state in self.optimizer.state.values():
-        #     for k, v in state.items():
-        #         if isinstance(v, torch.Tensor):
-        #             state[k] = v.cuda()
+        self.lr = self.optimizer.param_groups[0]['lr']
         self.global_step = checkpoint['global_step']
         self.max_acc = checkpoint['max_acc']
+        # self.max_test_acc = checkpoint['max_test_acc']
+        # self.tester.max_acc = self.max_test_acc
         self.global_epoch = checkpoint['global_epoch']
-        print(f'loaded checkpoint from {self.arg.model_path}')
+        print(f'loaded checkpoint from {path}')
 
     def train(self, epochs, dataloader=None, model=None, is_master=True):
         if model is not None:
             self.model = model
         else:
-            self.model = Model(graph=self.arg.model_args['graph'],
+            self.model = Model(graph=graph.Graph(),
                                graph_args=self.arg.model_args['graph_args'])
         if dataloader is None:
             self.dataloader = DataLoader(
                 dataset=Feeder(**self.arg.train_feeder_args),
                 batch_size=self.arg.batch_size,
                 shuffle=True,
-                num_workers=0,
+                num_workers=4,
                 drop_last=True,
                 pin_memory=True,
             )
@@ -137,11 +153,26 @@ class Leaner():
             self.print_log(f'\t===== training from global steps {self.global_step} =====')
             self.train_writer = SummaryWriter(os.path.join(self.arg.log_dir, 'train'), 'train')
         mean_acc = 0
-        max_test_acc = 0.65
         for epoch in range(self.global_epoch,epochs):
             loss_value = []
             acc_value = []
             lr = self.adjust_learning_rate(epoch)
+            if is_master:
+                print(f'\tadjusted learning rate from [{self.lr:.6f}] to [{lr:.6f}]')
+            # if lr != self.lr:
+            #     global_epoch = self.global_epoch
+            #     global_step = self.global_step
+            #     max_acc = self.max_acc
+            #     max_test_acc = self.tester.max_acc
+            #     self.load_from_checkpoint(f'{self.arg.model_saved_dir}/best_test_weights.pt')
+            #     if is_master:
+            #         print(f'\tadjusted learning rate from [{self.lr:.6f}] to [{lr:.6f}]')
+            #     self.global_epoch = global_epoch
+            #     self.global_step = global_step
+            #     self.max_acc = max_acc
+            #     self.tester.max_acc = max_test_acc
+            #     self.adjust_learning_rate(epoch)
+            #     self.lr = self.optimizer.param_groups[0]['lr']
             if sampler is not None:
                 sampler.set_epoch(epoch)
             for data, label in tqdm(self.dataloader, desc='Training progress epoch {}'.format(epoch)) \
@@ -150,7 +181,7 @@ class Leaner():
                     self.global_step += 1
                 # data [N, 12, 300, 17, 2]
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
-                data = data[:,:3,:]
+                data = data[:,0:3,:]
                 # label [N,]
                 label = torch.as_tensor(label, dtype=torch.int64, device=self.device).detach()
                 # forward
@@ -190,10 +221,9 @@ class Leaner():
                 self.save_to_checkpoint(self.state_dict())
 
                 # logging
-                self.train_writer.add_scalar('acc', now_acc, self.global_epoch)
-                self.train_writer.add_scalar('loss', loss.data.item(), self.global_epoch)
-                self.lr = self.optimizer.param_groups[0]['lr']
-                self.train_writer.add_scalar('lr', self.lr, self.global_step)
+                self.train_writer.add_scalar('acc', mean_acc, self.global_epoch)
+                self.train_writer.add_scalar('loss', mean_loss, self.global_epoch)
+                self.train_writer.add_scalar('lr', self.lr, self.global_epoch)
                 if mean_acc > self.max_acc:
                     self.max_acc = mean_acc
                     self.save_to_checkpoint(self.state_dict(), f'weights_acc_{self.max_acc:.4f}')
@@ -204,12 +234,9 @@ class Leaner():
                 self.print_log(f'\t Max training  acc: {self.max_acc:.4f}')
                 # testing
                 self.tester.test(epoch)
-                if self.tester.max_acc > max_test_acc:
+                if self.tester.max_acc > self.max_test_acc:
                     self.save_to_checkpoint(self.state_dict(), 'best_test_weights')
-                if max_test_acc != 0.65 and max_test_acc - self.tester.acc > 0.05:
-                    self.print_log('Model Already OverFitting!')
-                    return
-                max_test_acc = self.tester.max_acc
+                self.max_test_acc = self.tester.max_acc
                 self.print_log(f'\t============ global steps {self.global_step} ============')
 
             self.global_epoch += 1
@@ -236,10 +263,9 @@ def train_distributed(replica_id, replica_count, port, arg):
         drop_last=True,
         persistent_workers=True
     )
-    model = Model(graph=arg.model_args['graph'],
+    model = Model(graph=graph.Graph(),
                   graph_args=arg.model_args['graph_args']).to(leaner.device)
     model = DistributedDataParallel(model, device_ids=[replica_id], find_unused_parameters=True)
-    # model = DistributedDataParallel(model, device_ids=[replica_id])
     leaner.train(arg.num_epoch, dataloader, model, is_master=replica_id==0)
 
 

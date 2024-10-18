@@ -23,15 +23,15 @@ graph = ((10, 8), (8, 6), (9, 7), (7, 5), (15, 13), (13, 11), (16, 14), (14, 12)
 
 # bone
 def gen_bone(set, debug=False, is_master=True):
-    if os.path.exists(f'./data/{set}_bone.npy'):
+    if os.path.exists(f'./data/train/{set}_bone.npy'):
         if is_master:
             print('bone modality already exists')
         return
-    data = open_memmap('./data/{}_joint.npy'.format(set),mode='r')
+    data = open_memmap('./data/train/{}_joint.npy'.format(set),mode='r')
     if debug:
         data = data[:100,:]
     N, C, T, V, M = data.shape
-    fp_sp = open_memmap('./data/{}_bone.npy'.format(set),dtype='float32',mode='w+',shape=(N, 3, T, V, M))
+    fp_sp = open_memmap('./data/train/{}_bone.npy'.format(set),dtype='float32',mode='w+',shape=(N, 3, T, V, M))
     if debug:
         fp_sp = fp_sp[:100,:]
     for v1, v2 in tqdm(graph, desc='Generating bone modality'):
@@ -43,13 +43,13 @@ def merge_joint_bone_data(set, debug=False, is_master=True):
         if is_master:
             print('joint_bone modality already exists')
         return
-    data_jpt = open_memmap('./data/{}_joint.npy'.format(set), mode='r')
-    data_bone = open_memmap('./data/{}_bone.npy'.format(set), mode='r')
+    data_jpt = open_memmap('./data/train/{}_joint.npy'.format(set), mode='r')
+    data_bone = open_memmap('./data/train/{}_bone.npy'.format(set), mode='r')
     if debug:
         data_jpt = data_jpt[:100,:]
         data_bone = data_bone[:100,:]
     N, C, T, V, M = data_jpt.shape
-    data_jpt_bone = open_memmap('./data/{}_joint_bone.npy'.format(set), dtype='float32', mode='w+', shape=(N, 6, T, V, M))
+    data_jpt_bone = open_memmap('./data/train/{}_joint_bone.npy'.format(set), dtype='float32', mode='w+', shape=(N, 6, T, V, M))
     data_jpt_bone[:, :C, :, :, :] = data_jpt
     data_jpt_bone[:, C:, :, :, :] = data_bone
 
