@@ -8,7 +8,7 @@ import random
 from tqdm import tqdm
 from pre_data.feeder import Feeder
 import pre_data.graph as graph
-from model.ske_mixf import Model
+from model.ctrgcn_xyz import Model
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
@@ -21,12 +21,19 @@ def _get_free_port():
     with socketserver.TCPServer(('localhost', 0), None) as s:
         return s.server_address[1]
 
+
+def setup_seed(seed_value):
+    np.random.seed(seed_value)
+    random.seed(seed_value)
+    os.environ['PYTHONHASHSEED'] = str(seed_value)  # 为了禁止hash随机化，使得实验可复现。
+    torch.manual_seed(seed_value)  # 为CPU设置随机种子
+    torch.cuda.manual_seed(seed_value)  # 为当前GPU设置随机种子（只用一块GPU）
+    torch.cuda.manual_seed_all(seed_value)  # 为所有GPU设置随机种子（多块GPU）
+
+
 class Leaner():
     def __init__(self, arg):
         self.arg = arg
-        seed = random.randint(0,int(1e9))
-        self.print_log(f'seed is set to: {seed}')
-        # self.setup_seed(seed)
         self.global_step = 0
         self.global_epoch = 0
         self.device = torch.device('cuda:{}'.format(self.arg.device))
@@ -35,14 +42,6 @@ class Leaner():
         self.max_test_acc = 0.3
         self.max_acc = 0.8
         self.tester = test.Val(arg)
-
-    def setup_seed(self, seed_value):
-        np.random.seed(seed_value)
-        random.seed(seed_value)
-        os.environ['PYTHONHASHSEED'] = str(seed_value)  # 为了禁止hash随机化，使得实验可复现。
-        torch.manual_seed(seed_value)  # 为CPU设置随机种子
-        torch.cuda.manual_seed(seed_value)  # 为当前GPU设置随机种子（只用一块GPU）
-        torch.cuda.manual_seed_all(seed_value)  # 为所有GPU设置随机种子（多块GPU）
 
     def print_log(self, str):
         print(str)
@@ -157,7 +156,7 @@ class Leaner():
             loss_value = []
             acc_value = []
             lr = self.adjust_learning_rate(epoch)
-            if is_master:
+            if is_master and lr != self.lr:
                 print(f'\tadjusted learning rate from [{self.lr:.6f}] to [{lr:.6f}]')
             # if lr != self.lr:
             #     global_epoch = self.global_epoch
@@ -284,6 +283,9 @@ if __name__ == '__main__':
             parser.set_defaults(**default_arg)
 
     arg = parser.parse_args()
+    seed = random.randint(0, int(1e9))
+    setup_seed(seed)
+    print(f'seed is set to: {seed}')
     leaner = Leaner(arg)
     if not arg.distributed:
         arg.device_count = 1
