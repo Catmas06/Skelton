@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from pre_data.feeder import Feeder
 import pre_data.graph as graph
-from model.ske_mixf import Model
+from model.ctrgcn_xyz import Model
 from utils import tools
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
