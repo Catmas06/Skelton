@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from pre_data.feeder import Feeder
 import pre_data.graph as graph
-from model.ctrgcn_xyz import Model
+from model.dmodel import Model
 from utils import tools
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -74,7 +74,7 @@ class Val():
             for data, label in tqdm(self.dataloader, desc='Testing progress epoch {}'.format(epoch)):
                 # get data [N, 3, 300, 17, 2]
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
-                data = data[:,0:3,:]
+                data = data[:,6:9,:]
                 label = torch.as_tensor(label, dtype=torch.int64, device=self.device).detach()
 
                 # forward
@@ -115,7 +115,7 @@ class Val():
         with torch.no_grad():
             for data in tqdm(self.dataloader, desc='Testing progress'):
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
-                data = data[:,9:12,:]
+                data = data[:,3:6,:]
                 output = self.model(data)
                 if confidence is None:
                     confidence = np.array(np.array(output.cpu()))

@@ -8,7 +8,7 @@ import random
 from tqdm import tqdm
 from pre_data.feeder import Feeder
 import pre_data.graph as graph
-from model.ctrgcn_xyz import Model
+from model.dmodel import Model
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
@@ -29,6 +29,14 @@ def setup_seed(seed_value):
     torch.manual_seed(seed_value)  # 为CPU设置随机种子
     torch.cuda.manual_seed(seed_value)  # 为当前GPU设置随机种子（只用一块GPU）
     torch.cuda.manual_seed_all(seed_value)  # 为所有GPU设置随机种子（多块GPU）
+    torch.backends.cudnn.deterministic = True
+
+def print_log(log_dir, str):
+    print(str)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    with open('{}/log.txt'.format(log_dir), 'a') as f:
+        print(str, file=f)
 
 
 class Leaner():
@@ -40,7 +48,7 @@ class Leaner():
         self.loss = torch.nn.CrossEntropyLoss()
         self.lr = 0.2
         self.max_test_acc = 0.3
-        self.max_acc = 0.8
+        self.max_acc = 0.87
         self.tester = test.Val(arg)
 
     def print_log(self, str):
@@ -152,26 +160,27 @@ class Leaner():
             self.print_log(f'\t===== training from global steps {self.global_step} =====')
             self.train_writer = SummaryWriter(os.path.join(self.arg.log_dir, 'train'), 'train')
         mean_acc = 0
-        for epoch in range(self.global_epoch,epochs):
+        for epoch in range(self.global_epoch, epochs):
             loss_value = []
             acc_value = []
             lr = self.adjust_learning_rate(epoch)
+            # self.lr = lr
             if is_master and lr != self.lr:
                 print(f'\tadjusted learning rate from [{self.lr:.6f}] to [{lr:.6f}]')
-            # if lr != self.lr:
-            #     global_epoch = self.global_epoch
-            #     global_step = self.global_step
-            #     max_acc = self.max_acc
-            #     max_test_acc = self.tester.max_acc
-            #     self.load_from_checkpoint(f'{self.arg.model_saved_dir}/best_test_weights.pt')
-            #     if is_master:
-            #         print(f'\tadjusted learning rate from [{self.lr:.6f}] to [{lr:.6f}]')
-            #     self.global_epoch = global_epoch
-            #     self.global_step = global_step
-            #     self.max_acc = max_acc
-            #     self.tester.max_acc = max_test_acc
-            #     self.adjust_learning_rate(epoch)
-            #     self.lr = self.optimizer.param_groups[0]['lr']
+            if lr != self.lr and os.path.exists(f'{self.arg.model_saved_dir}/best_test_weights.pt'):
+                global_epoch = self.global_epoch
+                global_step = self.global_step
+                max_acc = self.max_acc
+                max_test_acc = self.tester.max_acc
+                self.load_from_checkpoint(f'{self.arg.model_saved_dir}/best_test_weights.pt')
+                if is_master:
+                    print(f'\tadjusted learning rate from [{self.lr:.6f}] to [{lr:.6f}]')
+                self.global_epoch = global_epoch
+                self.global_step = global_step
+                self.max_acc = max_acc
+                self.tester.max_acc = max_test_acc
+                self.adjust_learning_rate(epoch)
+            self.lr = self.optimizer.param_groups[0]['lr']
             if sampler is not None:
                 sampler.set_epoch(epoch)
             for data, label in tqdm(self.dataloader, desc='Training progress epoch {}'.format(epoch)) \
@@ -180,7 +189,7 @@ class Leaner():
                     self.global_step += 1
                 # data [N, 12, 300, 17, 2]
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
-                data = data[:,0:3,:]
+                data = data[:,6:9,:]
                 # label [N,]
                 label = torch.as_tensor(label, dtype=torch.int64, device=self.device).detach()
                 # forward
@@ -285,7 +294,7 @@ if __name__ == '__main__':
     arg = parser.parse_args()
     seed = random.randint(0, int(1e9))
     setup_seed(seed)
-    print(f'seed is set to: {seed}')
+    print_log(arg.log_dir, f'seed is set to: {seed}')
     leaner = Leaner(arg)
     if not arg.distributed:
         arg.device_count = 1
