@@ -21,15 +21,12 @@ test_feeder_args:
   debug: False
 
 # model
-model: model.dmodel.Model
+model_type: TEG
 model_path: './output/teg_jm/weights.pt'  # 训练时加载模型的地址，可更改为其他如：./output/best_weights.pt
 model_args:
   num_class: 155
   num_point: 17
   num_person: 2
-#  graph: pre_data.graph.Graph
-  graph_args:
-    labeling_mode: 'spatial'
   in_channels: 3
 
 #optim

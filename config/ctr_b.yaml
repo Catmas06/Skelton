@@ -1,0 +1,51 @@
+log_dir: ./log/ctr_b            # 存放日志的目录，可直接设置为tensorboard的log_dir
+model_saved_dir: ./output/ctr_b  # 训练时储存模型的文件夹。一次训练会存储多个模型
+# feeder
+feeder: pre_data.feeder.Feeder
+train_feeder_args:
+  data_path: ./data/train/train_joint.npy
+  label_path: ./data/train/train_label.npy
+  debug: False
+  random_choose: False
+  random_shift: False
+  random_move: False
+  window_size: 64
+  normalization: False
+  p_interval: [0.5, 1]
+
+test_feeder_args:
+  data_path: ./data/train/test_joint_bone_motion.npy
+#  label_path: ./data/train/test_label.npy
+  window_size: 64
+  p_interval: [0.95]
+  debug: False
+
+# model
+model: CTR
+model_path: './output/ctr_b/best_test_weights.pt'  # 训练时加载模型的地址，可更改为其他如：./output/best_weights.pt
+model_args:
+  num_class: 155
+  num_point: 17
+  num_person: 2
+  in_channels: 3
+
+#optim
+optimizer: 'SGD'    # 可选： SGD、AdamW
+weight_decay: 4e-4  # 值越大，则参数越接近0
+base_lr: 0.1        # 未发生跳变时的学习率
+warm_up_epoch: 5    # 预热轮数
+step: [35, 55]       # 学习率在30、40轮时发生跳变，每次*0.1
+
+# training
+device: 1           # 单卡环境设置为0
+device_count: 1     # 多卡训练使用卡数，若不使用分布式则该参数无效
+batch_size: 64
+num_epoch: 65       # 指定训练总轮数。当加载模型时会保存已有训练轮数
+nesterov: True
+distributed: Fasle   # 是否使用分布式训练
+
+# testing
+test_path: './output/ctr_b/best_test_weights.pt'   # 测试模型的地址
+test_batch_size: 64                  # 可适当设置大一点
+test_device: 1                        # 单卡环境设置为0
+confidence_file_path: './output/score/ctr_b_score.npy'

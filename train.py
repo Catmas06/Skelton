@@ -8,7 +8,9 @@ import random
 from tqdm import tqdm
 from pre_data.feeder import Feeder
 import pre_data.graph as graph
-from model.dmodel import Model
+import model.ske_mixf as MF
+import model.ctrgcn_xyz as CTR
+import model.dmodel as TEG
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data.distributed import DistributedSampler
@@ -44,9 +46,10 @@ class Leaner():
         self.arg = arg
         self.global_step = 0
         self.global_epoch = 0
+        self.model_type = arg.model_type
         self.device = torch.device('cuda:{}'.format(self.arg.device))
         self.loss = torch.nn.CrossEntropyLoss()
-        self.lr = 0.2
+        self.lr = self.arg.base_lr
         self.max_test_acc = 0.3
         self.max_acc = 0.87
         self.tester = test.Val(arg)
@@ -135,9 +138,14 @@ class Leaner():
     def train(self, epochs, dataloader=None, model=None, is_master=True):
         if model is not None:
             self.model = model
+        elif self.model_type == 'MF':
+            self.model = MF.Model(graph=graph.Graph())
+        elif self.model_type == 'CTR':
+            self.model = CTR.Model(graph=graph.Graph())
+        elif self.model_type == 'TEG':
+            self.model = TEG.Model(graph=graph.Graph())
         else:
-            self.model = Model(graph=graph.Graph(),
-                               graph_args=self.arg.model_args['graph_args'])
+            raise ValueError(f'The model_type is not supported: {self.model_type}')
         if dataloader is None:
             self.dataloader = DataLoader(
                 dataset=Feeder(**self.arg.train_feeder_args),
