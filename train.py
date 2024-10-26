@@ -47,6 +47,7 @@ class Leaner():
         self.global_step = 0
         self.global_epoch = 0
         self.model_type = arg.model_type
+        self.data_idx = arg.data_idx
         self.device = torch.device('cuda:{}'.format(self.arg.device))
         self.loss = torch.nn.CrossEntropyLoss()
         self.lr = self.arg.base_lr
@@ -172,7 +173,6 @@ class Leaner():
             loss_value = []
             acc_value = []
             lr = self.adjust_learning_rate(epoch)
-            # self.lr = lr
             if is_master and lr != self.lr:
                 print(f'\tadjusted learning rate from [{self.lr:.6f}] to [{lr:.6f}]')
             if lr != self.lr and os.path.exists(f'{self.arg.model_saved_dir}/best_test_weights.pt'):
@@ -197,7 +197,7 @@ class Leaner():
                     self.global_step += 1
                 # data [N, 12, 300, 17, 2]
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
-                data = data[:,6:9,:]
+                data = data[:,self.data_idx:self.data_idx+3,:]
                 # label [N,]
                 label = torch.as_tensor(label, dtype=torch.int64, device=self.device).detach()
                 # forward
@@ -288,12 +288,12 @@ def train_distributed(replica_id, replica_count, port, arg):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Skelton-based Action Recognition')
-    parser.add_argument('--config_dir',
+    parser.add_argument('--config_path',
                         default='./config/params.yaml',
                         help='path of the config file')
     parser.add_argument('--epoch')
     p = parser.parse_args()
-    if p.config_dir is not None:
+    if p.config_path is not None:
         with open(p.config_dir, 'r') as f:
             # default_arg = yaml.load() 会报错
             default_arg = yaml.safe_load(f)

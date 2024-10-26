@@ -37,6 +37,7 @@ class Val():
         self.model = Model(graph=graph.Graph(),
                            graph_args=self.arg.model_args['graph_args'])
         self.device = torch.device('cuda:{}'.format(self.arg.test_device))
+        self.data_idx = arg.data_idx
         self.loss_func = torch.nn.CrossEntropyLoss()
         self.test_writer = SummaryWriter(os.path.join(arg.log_dir, 'test'), 'test')
         self.global_epoch = 0
@@ -74,7 +75,7 @@ class Val():
             for data, label in tqdm(self.dataloader, desc='Testing progress epoch {}'.format(epoch)):
                 # get data [N, 3, 300, 17, 2]
                 data = torch.as_tensor(data, dtype=torch.float32, device=self.device).detach()
-                data = data[:,6:9,:]
+                data = data[:,self.data_idx:self.data_idx+3,:]
                 label = torch.as_tensor(label, dtype=torch.int64, device=self.device).detach()
 
                 # forward

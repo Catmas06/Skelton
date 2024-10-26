@@ -51,18 +51,25 @@ class Feeder(Dataset):
             self.set = 'test'
         else:
             raise ValueError('The data_path must contain words train or test')
+        if 'train' in os.path.split(self.data_path)[-2]:
+            self.set0 = 'train'
+        elif 'test' in os.path.split(self.data_path)[-2]:
+            self.set0 = 'test'
+        else:
+            raise ValueError('The data_path must contain words train or test')
         assert os.path.exists(self.data_path), f'{self.data_path} does not exist'
-        assert os.path.exists(self.label_path), f'{self.label_path} does not exist'
-        label = np.load(self.label_path)
+        if self.set0 == 'train':
+            assert os.path.exists(self.label_path), f'{self.label_path} does not exist'
+            label = np.load(self.label_path)
         # load data
         if self.use_mmap:
             data = np.load(self.data_path, mmap_mode='r')
         else:
             data = np.load(self.data_path)
         N, C, T, V, M = data.shape
-        gen_modal.gen_bone(self.set, debug=self.debug, is_master=self.is_master)
-        gen_modal.merge_joint_bone_data(self.set, debug=self.debug, is_master=self.is_master)
         if not os.path.exists(f'./data/train/{self.set}_joint_bone_motion.npy'):
+            gen_modal.gen_bone(self.set, debug=self.debug, is_master=self.is_master)
+            gen_modal.merge_joint_bone_data(self.set, debug=self.debug, is_master=self.is_master)
             motion = np.load(f'./data/train/{self.set}_joint_bone.npy')
             data = np.array(motion)
             for t in tqdm(range(T - 1), desc='Generating motion modality'):
@@ -71,12 +78,11 @@ class Feeder(Dataset):
             # C:[joint, bone, joint_motion, bone_motion] 4*3=12
             data = np.concatenate((data, motion), axis=1)
             np.save(f'./data/train/{self.set}_joint_bone_motion.npy', data)
-
         else:
             data = np.load(f'./data/train/{self.set}_joint_bone_motion.npy')
             if self.is_master:
                 print('data already prepared')
-        for index in range(len(label)):
+        for index in range(len(data)):
             valid_frame_num = np.sum(data[index].sum(0).sum(-1).sum(-1) != 0)
             if valid_frame_num > 0 or self.set == 'test':
                 self.data.append(data[index])
@@ -84,7 +90,8 @@ class Feeder(Dataset):
         self.data = np.stack(self.data, axis=0)
         self.label = np.stack(self.label, axis=0)
         if self.debug:
-            self.label = self.label[0:100]
+            if self.set0 == 'test':
+                self.label = self.label[0:100]
             self.data = self.data[0:100]
 
 
@@ -102,16 +109,19 @@ class Feeder(Dataset):
 
     def __getitem__(self, index):
         data_numpy = self.data[index]
-        label = self.label[index]
+        label = None
+        if self.set0 == 'train':
+            label = self.label[index]
         data_numpy = np.array(data_numpy)
         # random crop
         if self.window_size!=-1:
             valid_frame_num = np.sum(data_numpy.sum(0).sum(-1).sum(-1) != 0)
-            # if valid_frame_num == 0:
-            #     self.data = np.delete(self.data, index, axis=0)
-            #     self.label = np.delete(self.label, index, axis=0)
-            #     return self.__getitem__(index)
-            data_numpy = tools.valid_crop_resize(data_numpy, valid_frame_num, self.p_interval, self.window_size)
+            if valid_frame_num == 0:
+                self.data = np.delete(self.data, index, axis=0)
+                print(f'The data[{index}] is 0.')
+                data_numpy = tools.valid_crop_resize(data_numpy, 300, self.p_interval, self.window_size)
+            else:
+                data_numpy = tools.valid_crop_resize(data_numpy, valid_frame_num, self.p_interval, self.window_size)
         if self.normalization:
             data_numpy = (data_numpy - self.mean_map) / self.std_map
         if self.random_shift:
@@ -122,7 +132,6 @@ class Feeder(Dataset):
             data_numpy = tools.auto_pading(data_numpy, self.window_size)
         if self.random_move:
             data_numpy = tools.random_move(data_numpy)
-
         return data_numpy, label
 
     def top_k(self, score, top_k):

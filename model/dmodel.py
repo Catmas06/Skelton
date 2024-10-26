@@ -327,11 +327,11 @@ class Model(nn.Module):
             self.l3 = TCNC_GCN_unit(64, 64, A, adaptive=adaptive, attention=attention)
             self.l4 = TCNC_GCN_unit(64, 64, A, adaptive=adaptive, attention=attention)
             self.l5 = TCNC_GCN_unit(64, 128, A, stride=2, adaptive=adaptive, attention=attention)
-            self.l6 = TA_GCN3D_unit(128, 128, 30, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0,pe=0)
-            self.l7 = TA_GCN3D_unit(128, 128, 30, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0,pe=0)
+            self.l6 = TA_GCN3D_unit(128, 128, 60, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0,pe=0)
+            self.l7 = TA_GCN3D_unit(128, 128, 60, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0,pe=0)
             self.l8 = TCNC_GCN3D_unit(128, 256, A, stride=2, adaptive=adaptive, attention=attention)
-            self.l9 = TA_GCN3D_unit(256, 256, 15, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0.0,pe=0)
-            self.l10 = TA_GCN3D_unit(256, 256, 15, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0.0,pe=0)
+            self.l9 = TA_GCN3D_unit(256, 256, 30, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0.0,pe=0)
+            self.l10 = TA_GCN3D_unit(256, 256, 30, A, adaptive=adaptive, attention=attention,inherent=0,head=1,dropout=0.0,pe=0)
             output_emb = 256
 
         self.emb_dim = num_point * 256
