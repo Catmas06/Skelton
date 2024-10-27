@@ -1,9 +1,10 @@
 import math
+import pdb
+
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from pre_data.graph import Graph
 
 def import_class(name):
     components = name.split('.')
@@ -263,7 +264,10 @@ class Model(nn.Module):
                  drop_out=0, adaptive=True):
         super(Model, self).__init__()
 
-        self.graph = Graph()
+        if graph is None:
+            raise ValueError()
+        else:
+            self.graph = graph
 
         A = self.graph.A # 3,17,17
 

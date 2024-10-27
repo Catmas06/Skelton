@@ -23,12 +23,13 @@ class Feeder(Dataset):
     def __init__(self, data_path, label_path,
                  random_choose=False, random_shift=False, random_move=False,
                  window_size=-1, normalization=False, debug=False, use_mmap=False,
-                 is_master=True, p_interval=[1]):
+                 is_master=True, p_interval=[1], use_clean=True):
         self.debug = debug
         self.data_path = data_path
         self.label_path = label_path
         self.data = []
         self.label = []
+        self.use_clean = use_clean
         self.random_choose = random_choose
         self.random_shift = random_shift
         self.random_move = random_move
@@ -45,6 +46,7 @@ class Feeder(Dataset):
     def load_data(self):
         # data: N C V T M
         data = None
+        label = None
         if 'train' in os.path.split(self.data_path)[-1]:
             self.set = 'train'
         elif 'test' in os.path.split(self.data_path)[-1]:
@@ -67,28 +69,30 @@ class Feeder(Dataset):
         else:
             data = np.load(self.data_path)
         N, C, T, V, M = data.shape
-        if not os.path.exists(f'./data/train/{self.set}_joint_bone_motion.npy'):
-            gen_modal.gen_bone(self.set, debug=self.debug, is_master=self.is_master)
-            gen_modal.merge_joint_bone_data(self.set, debug=self.debug, is_master=self.is_master)
-            motion = np.load(f'./data/train/{self.set}_joint_bone.npy')
+        if not os.path.exists(f'./data/{self.set0}/{self.set}_joint_bone_motion.npy'):
+            gen_modal.gen_bone(self.set, self.set0, debug=self.debug, is_master=self.is_master)
+            gen_modal.merge_joint_bone_data(self.set, self.set0, debug=self.debug, is_master=self.is_master)
+            motion = np.load(f'./data/{self.set0}/{self.set}_joint_bone.npy')
             data = np.array(motion)
             for t in tqdm(range(T - 1), desc='Generating motion modality'):
                 motion[:, :, t, :, :] = motion[:, :, t + 1, :, :] - motion[:, :, t, :, :]
             motion[:, :, T - 1, :, :] = 0
             # C:[joint, bone, joint_motion, bone_motion] 4*3=12
             data = np.concatenate((data, motion), axis=1)
-            np.save(f'./data/train/{self.set}_joint_bone_motion.npy', data)
+            np.save(f'./data/{self.set0}/{self.set}_joint_bone_motion.npy', data)
         else:
-            data = np.load(f'./data/train/{self.set}_joint_bone_motion.npy')
+            data = np.load(f'./data/{self.set0}/{self.set}_joint_bone_motion.npy')
             if self.is_master:
                 print('data already prepared')
         for index in range(len(data)):
             valid_frame_num = np.sum(data[index].sum(0).sum(-1).sum(-1) != 0)
-            if valid_frame_num > 0 or self.set == 'test':
+            if valid_frame_num > 0 or self.set == 'test' or self.use_clean is not True:
                 self.data.append(data[index])
-                self.label.append(label[index])
+                if label is not None:
+                    self.label.append(label[index])
         self.data = np.stack(self.data, axis=0)
-        self.label = np.stack(self.label, axis=0)
+        if label is not None:
+            self.label = np.stack(self.label, axis=0)
         if self.debug:
             if self.set0 == 'test':
                 self.label = self.label[0:100]
@@ -117,7 +121,7 @@ class Feeder(Dataset):
         if self.window_size!=-1:
             valid_frame_num = np.sum(data_numpy.sum(0).sum(-1).sum(-1) != 0)
             if valid_frame_num == 0:
-                self.data = np.delete(self.data, index, axis=0)
+                # self.data = np.delete(self.data, index, axis=0)
                 print(f'The data[{index}] is 0.')
                 data_numpy = tools.valid_crop_resize(data_numpy, 300, self.p_interval, self.window_size)
             else:
@@ -142,6 +146,7 @@ class Feeder(Dataset):
 
 if __name__ == '__main__':
     os.chdir('..')
-    feeder = Feeder('./data/train/test_joint.npy', './data/train/test_label.npy', debug=False)
+    # feeder = Feeder('./data/train/test_joint.npy', './data/train/test_label.npy', debug=False)
+    feeder = Feeder('./data/test/test_joint_bone_motion_B.npy', None, debug=False)
     it, label = feeder.__getitem__(14)
     print(it)

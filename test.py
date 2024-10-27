@@ -6,7 +6,9 @@ import numpy as np
 from tqdm import tqdm
 from pre_data.feeder import Feeder
 import pre_data.graph as graph
-from model.dmodel import Model
+import model.ske_mixf as MF
+import model.ctrgcn_xyz as CTR
+import model.dmodel as TEG
 from utils import tools
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -34,8 +36,15 @@ class Val():
             num_workers=0,
             drop_last=False,
         )
-        self.model = Model(graph=graph.Graph(),
-                           graph_args=self.arg.model_args['graph_args'])
+        self.model_type = arg.model_type
+        if self.model_type == 'MF':
+            self.model = MF.Model(graph=graph.Graph())
+        elif self.model_type == 'CTR':
+            self.model = CTR.Model(graph=graph.Graph())
+        elif self.model_type == 'TEG':
+            self.model = TEG.Model(graph=graph.Graph())
+        else:
+            raise ValueError(f'The model_type is not supported: {self.model_type}')
         self.device = torch.device('cuda:{}'.format(self.arg.test_device))
         self.data_idx = arg.data_idx
         self.loss_func = torch.nn.CrossEntropyLoss()

@@ -11,34 +11,34 @@ import model.ske_mixf as MF
 import model.ctrgcn_xyz as CTR
 
 # 假设 te_joint 是模型输出的张量
-te_joint = torch.from_numpy(np.random.rand(16432, 155))# 示例数据
+# te_joint = torch.from_numpy(np.random.rand(16432, 155))# 示例数据
 train_Alabel = torch.from_numpy(np.load('./data/train/train_label.npy')) # 假设标签文件已经存在
 test_Alabel = torch.from_numpy(np.load('./data/train/test_label.npy'))
-mf_j_A = torch.from_numpy(np.load('./output/score/mf_j_A_train.npy'))
-mf_b_A = torch.from_numpy(np.load('./output/score/mf_b_A_train.npy'))
-mf_jm_A = torch.from_numpy(np.load('./output/score/mf_jm_A_train.npy'))
-mf_bm_A = torch.from_numpy(np.load('./output/score/mf_bm_A_train.npy'))
-ctr_j_A = torch.from_numpy(np.load('./output/score/ctr_j_A_train.npy'))
-ctr_b_A = torch.from_numpy(np.load('./output/score/ctr_b_A_train.npy'))
-ctr_jm_A = torch.from_numpy(np.load('./output/score/ctr_jm_A_train.npy'))
-cre_bm_A = torch.from_numpy(np.load('./output/score/ctr_bm_A_train.npy'))
-mf_j_test = torch.from_numpy(np.load('./output/score/test_mf_j_A_test.npy'))
-mf_b_test = torch.from_numpy(np.load('./output/score/test_mf_b_A_test.npy'))
-mf_jm_test = torch.from_numpy(np.load('./output/score/test_mf_jm_A_test.npy'))
-mf_bm_test = torch.from_numpy(np.load('./output/score/test_mf_bm_A_test.npy'))
-ctr_j_test= torch.from_numpy(np.load('./output/score/test_ctr_j_A_test.npy'))
-ctr_b_test= torch.from_numpy(np.load('./output/score/test_ctr_b_A_test.npy'))
-ctr_jm_test= torch.from_numpy(np.load('./output/score/test_ctr_jm_A_test.npy'))
-ctr_bm_test= torch.from_numpy(np.load('./output/score/test_ctr_bm_A_test.npy'))
-teg_j_test= torch.from_numpy(np.load('./output/score/test_teg_j_A_test.npy'))
-teg_b_test= torch.from_numpy(np.load('./output/score/test_teg_b_A_test.npy'))
-teg_jm_test= torch.from_numpy(np.load('./output/score/test_teg_jm_A_test.npy'))
-teg_bm_test= torch.from_numpy(np.load('./output/score/test_teg_bm_A_test.npy'))
-def get_acc(te_joint, target):
+mf_j_A = torch.from_numpy(np.load('./output/score/mf_j_A.npy'))
+# mf_b_A = torch.from_numpy(np.load('./output/score/mf_b_A.npy'))
+# mf_jm_A = torch.from_numpy(np.load('./output/score/mf_jm_A.npy'))
+# mf_bm_A = torch.from_numpy(np.load('./output/score/mf_bm_A.npy'))
+# ctr_j_A = torch.from_numpy(np.load('./output/score/ctr_j_A.npy'))
+# ctr_b_A = torch.from_numpy(np.load('./output/score/ctr_b_A.npy'))
+# ctr_jm_A = torch.from_numpy(np.load('./output/score/ctr_jm_A.npy'))
+# cre_bm_A = torch.from_numpy(np.load('./output/score/ctr_bm_A.npy'))
+# mf_j_test = torch.from_numpy(np.load('./output/score/test_mf_j_test.npy'))
+# mf_b_test = torch.from_numpy(np.load('./output/score/test_mf_b_test.npy'))
+# mf_jm_test = torch.from_numpy(np.load('./output/score/test_mf_jm_test.npy'))
+# mf_bm_test = torch.from_numpy(np.load('./output/score/test_mf_bm_test.npy'))
+# ctr_j_test= torch.from_numpy(np.load('./output/score/test_ctr_j_test.npy'))
+# ctr_b_test= torch.from_numpy(np.load('./output/score/test_ctr_b_test.npy'))
+# ctr_jm_test= torch.from_numpy(np.load('./output/score/test_ctr_jm_test.npy'))
+# ctr_bm_test= torch.from_numpy(np.load('./output/score/test_ctr_bm_test.npy'))
+# teg_j_test= torch.from_numpy(np.load('./output/score/test_teg_j_test.npy'))
+# teg_b_test= torch.from_numpy(np.load('./output/score/test_teg_b_test.npy'))
+# teg_jm_test= torch.from_numpy(np.load('./output/score/test_teg_jm_test.npy'))
+# teg_bm_test= torch.from_numpy(np.load('./output/score/test_teg_bm_test.npy'))
 
+def get_acc(te_joint, target):
     # 找到最大预测值和对应的标签
     value, te_joint_label = torch.max(te_joint.data, 1)
-    to_acc = torch.mean((te_joint_label == train_Alabel.data).float()).item()
+    # to_acc = torch.mean((te_joint_label == train_Alabel.data).float()).item()
 
     indices = []
     acc = [0] * 155
@@ -52,7 +52,7 @@ def get_acc(te_joint, target):
             # 计算该样本的准确率
             if te_joint_label[i] == target[i]:  # 对比整个目标标签
                 acc[j] += 1
-        now_acc.append(to_acc*acc[j]/len(indices[j]))
+        now_acc.append(acc[j]/len(indices[j]))
     return now_acc
 
 def load_from_checkpoint(path, model, device='cuda:0'):
@@ -89,52 +89,6 @@ def demo():
     now_acc = torch.mean((out_label == test_Alabel.data).float()).item()
     print(now_acc)
     confidence = np.array(np.array(output))
-
-class NumpyDataset(Dataset):
-    def __init__(self, path, label):
-        self.data = np.load(path)
-        self.label = np.load(label)
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        sample = self.data[idx]
-        sample = tools.valid_crop_resize(sample, 300, [0.95], 60)
-        return (torch.tensor(sample, dtype=torch.float32),
-                torch.tensor(self.label[idx], dtype=torch.float32))
-
-def generate_score(model_idx, model_path, save_path, idx,
-                   data_path='./data/train/train_joint_bone_motion.npy',
-                   label_path='./data/train/train_joint_bone_motion.npy'):
-    model = None
-    if model_idx == 0:
-        model = MF.Model(graph=Graph)
-    if model_idx == 1:
-        mdoel = CTR.Model(graph=Graph)
-    if model_idx == 2:
-        model = TEG.Model(graph=Graph())
-    load_from_checkpoint(model_path, model)
-    confidence = None
-    dataset = NumpyDataset(data_path, label_path)
-    loader = DataLoader(
-        dataset=dataset,
-        batch_size=512,
-        shuffle=False,
-        num_workers=0,
-        drop_last=False,
-    )
-    model.eval()
-    model.to('cuda:0')
-    with torch.no_grad():
-        for data, label in tqdm(loader, desc='Testing progress'):
-            data = data[:, idx:idx+3, :].to('cuda:0')
-            output = model(data)
-            if confidence is None:
-                confidence = np.array(np.array(output.cpu()))
-            else:
-                confidence = np.append(confidence, np.array(output.cpu()), axis=0)
-    np.save(save_path, confidence)
 
 
 def objective(weights, ):
@@ -175,25 +129,22 @@ def objective(weights, ):
     return -acc
 
 if __name__ == '__main__':
-    space = [(0.2, 1.2) for i in range(12)]
-    result = gp_minimize(objective, space, n_calls=200, random_state=0)
-    print('Maximum accuracy: {:.4f}%'.format(-result.fun * 100))
-    print('Optimal weights: {}'.format(result.x))
-    # generate_score(2,'./output/models/teg_j.pt',
-    #                './output/score/test_teg_j_A_test', 0,
-    #                'data/train/test_joint_bone_motion.npy',
-    #                'data/train/test_label.npy')
-    # generate_score(2, './output/models/teg_b.pt',
-    #                './output/score/test_teg_b_A_test', 3,
-    #                'data/train/test_joint_bone_motion.npy',
-    #                'data/train/test_label.npy')
-    # generate_score(2,'./output/models/teg_jm.pt',
-    #                './output/score/test_teg_jm_A_test', 6,
-    #                'data/train/test_joint_bone_motion.npy',
-    #                'data/train/test_label.npy')
-    # generate_score(2, './output/models/teg_bm.pt',
-    #                './output/score/test_teg_bm_A_test', 9,
-    #                'data/train/test_joint_bone_motion.npy',
-    #                'data/train/test_label.npy')
+    # space = [(0.2, 1.2) for i in range(12)]
+    # result = gp_minimize(objective, space, n_calls=200, random_state=0)
+    # print('Maximum accuracy: {:.4f}%'.format(-result.fun * 100))
+    # print('Optimal weights: {}'.format(result.x))
+    mf_j_acc = get_acc(mf_j_A, train_Alabel)
+    # mf_b_acc = get_acc(mf_b_A, train_Alabel)
+    # mf_jm_acc = get_acc(mf_jm_A, train_Alabel)
+    # mf_bm_acc = get_acc(mf_bm_A, train_Alabel)
+    # ctr_j_acc = get_acc(ctr_j_A, train_Alabel)
+    # ctr_b_acc = get_acc(ctr_b_A, train_Alabel)
+    # ctr_jm_acc = get_acc(ctr_jm_A, train_Alabel)
+    # ctr_bm_acc = get_acc(ctr_bm_A, train_Alabel)
+    # teg_j_acc = get_acc(teg_j_A, train_Alabel)
+    # teg_b_acc = get_acc(teg_b_A, train_Alabel)
+    # teg_jm_acc = get_acc(teg_jm_A, train_Alabel)
+    # teg_bm_acc = get_acc(teg_bm_A, train_Alabel)
+
 
 

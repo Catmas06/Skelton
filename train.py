@@ -176,18 +176,18 @@ class Leaner():
             if is_master and lr != self.lr:
                 print(f'\tadjusted learning rate from [{self.lr:.6f}] to [{lr:.6f}]')
             if lr != self.lr and os.path.exists(f'{self.arg.model_saved_dir}/best_test_weights.pt'):
-                global_epoch = self.global_epoch
-                global_step = self.global_step
-                max_acc = self.max_acc
-                max_test_acc = self.tester.max_acc
-                self.load_from_checkpoint(f'{self.arg.model_saved_dir}/best_test_weights.pt')
+                # global_epoch = self.global_epoch
+                # global_step = self.global_step
+                # max_acc = self.max_acc
+                # max_test_acc = self.tester.max_acc
+                # self.load_from_checkpoint(f'{self.arg.model_saved_dir}/best_test_weights.pt')
                 if is_master:
                     print(f'\tadjusted learning rate from [{self.lr:.6f}] to [{lr:.6f}]')
-                self.global_epoch = global_epoch
-                self.global_step = global_step
-                self.max_acc = max_acc
-                self.tester.max_acc = max_test_acc
-                self.adjust_learning_rate(epoch)
+                # self.global_epoch = global_epoch
+                # self.global_step = global_step
+                # self.max_acc = max_acc
+                # self.tester.max_acc = max_test_acc
+                # self.adjust_learning_rate(epoch)
             self.lr = self.optimizer.param_groups[0]['lr']
             if sampler is not None:
                 sampler.set_epoch(epoch)
@@ -294,7 +294,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch')
     p = parser.parse_args()
     if p.config_path is not None:
-        with open(p.config_dir, 'r') as f:
+        with open(p.config_path, 'r') as f:
             # default_arg = yaml.load() 会报错
             default_arg = yaml.safe_load(f)
             parser.set_defaults(**default_arg)
