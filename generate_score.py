@@ -1,6 +1,5 @@
 import torch
 import numpy as np
-import argparse
 import yaml
 import os
 import pre_data.graph as graph
@@ -104,3 +103,13 @@ def generate_scores(config_path):
 if __name__ == '__main__':
     generate_scores('./config/mf_j.yaml')
     generate_scores('./config/mf_b.yaml')
+    generate_scores('./config/mf_jm.yaml')
+    generate_scores('./config/mf_bm.yaml')
+    generate_scores('./config/ctr_j.yaml')
+    generate_scores('./config/ctr_b.yaml')
+    generate_scores('./config/ctr_jm.yaml')
+    generate_scores('./config/ctr_bm.yaml')
+    generate_scores('./config/teg_j.yaml')
+    generate_scores('./config/teg_b.yaml')
+    generate_scores('./config/teg_jm.yaml')
+    generate_scores('./config/teg_bm.yaml')

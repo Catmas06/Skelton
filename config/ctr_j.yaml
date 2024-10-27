@@ -49,4 +49,11 @@ distributed: False   # 是否使用分布式训练
 test_path: './output/ctr_j/weights.pt'   # 测试模型的地址
 test_batch_size: 64                  # 可适当设置大一点
 test_device: 0                        # 单卡环境设置为0
-confidence_file_path: './output/score/ctr_j_score.npy'
+
+# score
+score_args:
+score_device: 'cuda:0'
+score_batch_size: 512
+confidence_A_path: './output/score/ctr_j_A.npy'
+confidence_test_path: './output/score/ctr_j_test.npy'
+confidence_B_path: './output/score/ctr_j_B.npy'

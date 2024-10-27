@@ -1,5 +1,5 @@
-log_dir: ./log/mf_jm            # 存放日志的目录，可直接设置为tensorboard的log_dir
-model_saved_dir: ./output/mf_jm  # 训练时储存模型的文件夹。一次训练会存储多个模型
+log_dir: ./log/teg_b            # 存放日志的目录，可直接设置为tensorboard的log_dir
+model_saved_dir: ./output/teg_b  # 训练时储存模型的文件夹。一次训练会存储多个模型
 # feeder
 feeder: pre_data.feeder.Feeder
 train_feeder_args:
@@ -9,20 +9,20 @@ train_feeder_args:
   random_choose: False
   random_shift: False
   random_move: False
-  window_size: 64
+  window_size: 60
   normalization: False
   p_interval: [0.5, 1]
 
 test_feeder_args:
   data_path: ./data/train/test_joint.npy
   label_path: ./data/train/test_label.npy
-  window_size: 64
+  window_size: 60
   p_interval: [0.95]
   debug: False
 
 # model
-model_type: MF
-model_path: './output/mf_jm/weights.pt'  # 训练时加载模型的地址，可更改为其他如：./output/best_weights.pt
+model_type: TEG
+model_path: './output/teg_b/weights.pt'  # 训练时加载模型的地址，可更改为其他如：./output/best_weights.pt
 model_args:
   num_class: 155
   num_point: 17
@@ -31,29 +31,29 @@ model_args:
 
 #optim
 optimizer: 'SGD'    # 可选： SGD、AdamW
-weight_decay: 5e-4  # 值越大，则参数越接近0
-base_lr: 0.2        # 未发生跳变时的学习率
+weight_decay: 4e-4  # 值越大，则参数越接近0
+base_lr: 0.1        # 未发生跳变时的学习率
 warm_up_epoch: 5    # 预热轮数
-step: [50,]       # 学习率在30、40轮时发生跳变，每次*0.1
+step: [30,40]       # 学习率在30、40轮时发生跳变，每次*0.1
 
 # training
 device: 0           # 单卡环境设置为0
 device_count: 0     # 多卡训练使用卡数，若不使用分布式则该参数无效
 batch_size: 128
-data_idx: 6
-num_epoch: 70       # 指定训练总轮数。当加载模型时会保存已有训练轮数
+data_idx: 0
+num_epoch: 50       # 指定训练总轮数。当加载模型时会保存已有训练轮数
 nesterov: True
 distributed: False   # 是否使用分布式训练
 
 # testing
-test_path: './output/mf_jm/weights.pt'   # 测试模型的地址
-test_batch_size: 32                  # 可适当设置大一点
+test_path: './output/teg_b/weights.pt'   # 测试模型的地址
+test_batch_size: 60                  # 可适当设置大一点
 test_device: 0                        # 单卡环境设置为0
 
 # score
 score_args:
 score_device: 'cuda:0'
 score_batch_size: 512
-confidence_A_path: './output/score/mf_jm_A.npy'
-confidence_test_path: './output/score/mf_jm_test.npy'
-confidence_B_path: './output/score/mf_jm_B.npy'
+confidence_A_path: './output/score/teg_b_A.npy'
+confidence_test_path: './output/score/teg_b_test.npy'
+confidence_B_path: './output/score/teg_b_B.npy'

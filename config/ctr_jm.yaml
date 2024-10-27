@@ -37,7 +37,7 @@ warm_up_epoch: 5    # 预热轮数
 step: [35, 55]       # 学习率在30、40轮时发生跳变，每次*0.1
 
 # training
-device: 1           # 单卡环境设置为0
+device: 0           # 单卡环境设置为0
 device_count: 1     # 多卡训练使用卡数，若不使用分布式则该参数无效
 batch_size: 64
 data_idx: 6
@@ -48,5 +48,12 @@ distributed: False   # 是否使用分布式训练
 # testing
 test_path: './output/ctr_jm/weights.pt'   # 测试模型的地址
 test_batch_size: 64                  # 可适当设置大一点
-test_device: 1                        # 单卡环境设置为0
-confidence_file_path: './output/score/ctr_jm_score.npy'
+test_device: 0                        # 单卡环境设置为0
+
+# score
+score_args:
+score_device: 'cuda:0'
+score_batch_size: 512
+confidence_A_path: './output/score/ctr_jm_A.npy'
+confidence_test_path: './output/score/ctr_jm_test.npy'
+confidence_B_path: './output/score/ctr_jm_B.npy'
