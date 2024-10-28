@@ -106,14 +106,14 @@ class Feeder(Dataset):
         self.std_map = data.transpose((0, 2, 4, 1, 3)).reshape((N * T * M, C * V)).std(axis=0).reshape((C, 1, V, 1))
 
     def __len__(self):
-        return len(self.label)
+        return len(self.data)
 
     def __iter__(self):
         return self
 
     def __getitem__(self, index):
         data_numpy = self.data[index]
-        label = None
+        label = -155
         if self.set0 == 'train':
             label = self.label[index]
         data_numpy = np.array(data_numpy)

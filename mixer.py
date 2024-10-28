@@ -4,18 +4,18 @@ from tqdm import tqdm
 from skopt import gp_minimize
 
 test_Alabel = torch.from_numpy(np.load('./data/train/test_label.npy'))
-mf_j_test = torch.from_numpy(np.load('./output/score/test_mf_j_test.npy'))
-mf_b_test = torch.from_numpy(np.load('./output/score/test_mf_b_test.npy'))
-mf_jm_test = torch.from_numpy(np.load('./output/score/test_mf_jm_test.npy'))
-mf_bm_test = torch.from_numpy(np.load('./output/score/test_mf_bm_test.npy'))
-ctr_j_test= torch.from_numpy(np.load('./output/score/test_ctr_j_test.npy'))
-ctr_b_test= torch.from_numpy(np.load('./output/score/test_ctr_b_test.npy'))
-ctr_jm_test= torch.from_numpy(np.load('./output/score/test_ctr_jm_test.npy'))
-ctr_bm_test= torch.from_numpy(np.load('./output/score/test_ctr_bm_test.npy'))
-teg_j_test= torch.from_numpy(np.load('./output/score/test_teg_j_test.npy'))
-teg_b_test= torch.from_numpy(np.load('./output/score/test_teg_b_test.npy'))
-teg_jm_test= torch.from_numpy(np.load('./output/score/test_teg_jm_test.npy'))
-teg_bm_test= torch.from_numpy(np.load('./output/score/test_teg_bm_test.npy'))
+mf_j_test = torch.from_numpy(np.load('./output/score/mf_j_test.npy'))
+mf_b_test = torch.from_numpy(np.load('./output/score/mf_b_test.npy'))
+mf_jm_test = torch.from_numpy(np.load('./output/score/mf_jm_test.npy'))
+mf_bm_test = torch.from_numpy(np.load('./output/score/mf_bm_test.npy'))
+ctr_j_test= torch.from_numpy(np.load('./output/score/ctr_j_test.npy'))
+ctr_b_test= torch.from_numpy(np.load('./output/score/ctr_b_test.npy'))
+ctr_jm_test= torch.from_numpy(np.load('./output/score/ctr_jm_test.npy'))
+ctr_bm_test= torch.from_numpy(np.load('./output/score/ctr_bm_test.npy'))
+teg_j_test= torch.from_numpy(np.load('./output/score/teg_j_test.npy'))
+teg_b_test= torch.from_numpy(np.load('./output/score/teg_b_test.npy'))
+teg_jm_test= torch.from_numpy(np.load('./output/score/teg_jm_test.npy'))
+teg_bm_test= torch.from_numpy(np.load('./output/score/teg_bm_test.npy'))
 
 def get_acc(te_joint, target):
     # 找到最大预测值和对应的标签

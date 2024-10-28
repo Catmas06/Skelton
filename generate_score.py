@@ -10,7 +10,7 @@ from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from pre_data.feeder import Feeder
 
-def load_from_checkpoint(path, model, device='cuda:0'):
+def load_from_checkpoint(path, model, device='cpu'):
     if not os.path.exists(path):
         raise FileNotFoundError(f'path of checkpoint does not exist: {path}')
     checkpoint = torch.load(path, map_location=torch.device('cpu'))
@@ -62,31 +62,31 @@ def generate_score(model_type, model_path, data_idx, data_path,
 
 def generate_scores(config_path):
     arg = None
-    with open(config_path, 'r') as f:
+    with open(config_path, 'rb') as f:
         arg = yaml.safe_load(f)
     arg['train_feeder_args']['p_interval'] = [0.95]
     # generate A train score
-    generate_score(model_type=arg['model_type'],
-                   model_path=f"{arg['model_saved_dir']}/best_test_weights.pt",
-                   data_idx=arg['data_idx'],
-                   data_path=arg['train_feeder_args']['data_path'],
-                   label_path=arg['train_feeder_args']['label_path'],
-                   save_path=arg['confidence_A_path'],
-                   device=arg['score_device'],
-                   window_size=arg['train_feeder_args']['window_size'],
-                   batch_size=arg['score_batch_size'],
-                   p_interval=arg['train_feeder_args']['p_interval'])
-    # generate A test score
-    generate_score(model_type=arg['model_type'],
-                   model_path=f"{arg['model_saved_dir']}/best_test_weights.pt",
-                   data_idx=arg['data_idx'],
-                   data_path=arg['test_feeder_args']['data_path'],
-                   label_path=arg['test_feeder_args']['label_path'],
-                   save_path=arg['confidence_test_path'],
-                   device=arg['score_device'],
-                   window_size=arg['test_feeder_args']['window_size'],
-                   batch_size=arg['score_batch_size'],
-                   p_interval=arg['test_feeder_args']['p_interval'])
+    # generate_score(model_type=arg['model_type'],
+    #                model_path=f"{arg['model_saved_dir']}/best_test_weights.pt",
+    #                data_idx=arg['data_idx'],
+    #                data_path=arg['train_feeder_args']['data_path'],
+    #                label_path=arg['train_feeder_args']['label_path'],
+    #                save_path=arg['confidence_A_path'],
+    #                device=arg['score_device'],
+    #                window_size=arg['train_feeder_args']['window_size'],
+    #                batch_size=arg['score_batch_size'],
+    #                p_interval=arg['train_feeder_args']['p_interval'])
+    # # generate A test score
+    # generate_score(model_type=arg['model_type'],
+    #                model_path=f"{arg['model_saved_dir']}/best_test_weights.pt",
+    #                data_idx=arg['data_idx'],
+    #                data_path=arg['test_feeder_args']['data_path'],
+    #                label_path=arg['test_feeder_args']['label_path'],
+    #                save_path=arg['confidence_test_path'],
+    #                device=arg['score_device'],
+    #                window_size=arg['test_feeder_args']['window_size'],
+    #                batch_size=arg['score_batch_size'],
+    #                p_interval=arg['test_feeder_args']['p_interval'])
     # generate B test score
     generate_score(model_type=arg['model_type'],
                    model_path=f"{arg['model_saved_dir']}/best_test_weights.pt",
@@ -110,6 +110,6 @@ if __name__ == '__main__':
     generate_scores('./config/ctr_jm.yaml')
     generate_scores('./config/ctr_bm.yaml')
     generate_scores('./config/teg_j.yaml')
-    generate_scores('./config/teg_b.yaml')
-    generate_scores('./config/teg_jm.yaml')
-    generate_scores('./config/teg_bm.yaml')
+    # generate_scores('./config/teg_b.yaml')
+    # generate_scores('./config/teg_jm.yaml')
+    # generate_scores('./config/teg_bm.yaml')
